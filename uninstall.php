@@ -19,7 +19,7 @@ require_once __DIR__ . '/includes/autoload.php';
 // Without the plugin, the page it created would only show a raw shortcode.
 ( new Sign_In_Page() )->delete_created_pages();
 
-foreach ( array( Schema::VERSION_OPTION, Sign_In_Page::OPTION ) as $gaa_option ) {
+foreach ( array( Schema::VERSION_OPTION, Sign_In_Page::OPTION, Rep_Codes::OPTION ) as $gaa_option ) {
 	delete_option( $gaa_option );
 }
 

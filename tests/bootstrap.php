@@ -47,6 +47,10 @@ tests_add_filter(
 		$GLOBALS['wp_roles'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Same reset WooCommerce's own test bootstrap does.
 		wp_roles();
 
+		// Order storage is fixed for the whole run: WooCommerce does not switch data stores cleanly mid-process.
+		// `composer test` runs the suite once per storage.
+		update_option( 'woocommerce_custom_orders_table_enabled', 'posts' === getenv( 'GAA_TEST_ORDER_STORAGE' ) ? 'no' : 'yes' );
+
 		// WordPress's installer recreates core tables on every run; do the same for the plugin's,
 		// so they always match the definitions in Schema.
 		( new GatedAccess\Schema() )->drop_tables();

@@ -31,6 +31,13 @@ final class Plugin {
 	private Otp_Service $otp;
 
 	/**
+	 * Audit trail.
+	 *
+	 * @var Audit_Log
+	 */
+	private Audit_Log $audit_log;
+
+	/**
 	 * Sign-in form and shortcode.
 	 *
 	 * @var Sign_In_Form
@@ -38,20 +45,43 @@ final class Plugin {
 	private Sign_In_Form $sign_in_form;
 
 	/**
+	 * Referral link capture and binding.
+	 *
+	 * @var Referral
+	 */
+	private Referral $referral;
+
+	/**
+	 * Order attribution at checkout.
+	 *
+	 * @var Order_Attribution
+	 */
+	private Order_Attribution $order_attribution;
+
+	/**
+	 * WooCommerce settings tab.
+	 *
+	 * @var Settings
+	 */
+	private Settings $settings;
+
+	/**
 	 * Builds the services.
 	 */
 	public function __construct() {
 		$hmac       = new Hmac();
+		$cookies    = new Cookies();
 		$identities = new Identities();
+		$rep_codes  = new Rep_Codes();
+		$session    = new Session( $identities, $hmac, $cookies );
 
-		$this->schema       = new Schema();
-		$this->otp          = new Otp_Service( $hmac );
-		$this->sign_in_form = new Sign_In_Form(
-			$this->otp,
-			$identities,
-			new Session( $identities, $hmac ),
-			new Sign_In_Page()
-		);
+		$this->schema            = new Schema();
+		$this->otp               = new Otp_Service( $hmac );
+		$this->audit_log         = new Audit_Log();
+		$this->sign_in_form      = new Sign_In_Form( $this->otp, $identities, $session, new Sign_In_Page() );
+		$this->referral          = new Referral( $rep_codes, $identities, $this->audit_log, $cookies );
+		$this->order_attribution = new Order_Attribution( $session, $rep_codes, $this->audit_log );
+		$this->settings          = new Settings( $rep_codes );
 	}
 
 	/**
@@ -62,8 +92,13 @@ final class Plugin {
 		add_action( 'init', array( $this->schema, 'maybe_upgrade' ), 1 );
 		add_action( 'init', array( $this, 'schedule_pruning' ) );
 		add_action( self::PRUNE_HOOK, array( $this->otp, 'prune' ) );
+		// Before Referral::bind(), so the history reads "verified" then "rep assigned".
+		add_action( 'gaa_identity_verified', array( $this->audit_log, 'record_verification' ), 5 );
 
 		$this->sign_in_form->register_hooks();
+		$this->referral->register_hooks();
+		$this->order_attribution->register_hooks();
+		$this->settings->register_hooks();
 	}
 
 	/**

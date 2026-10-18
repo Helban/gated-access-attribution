@@ -5,6 +5,7 @@
  * @package GatedAccess
  */
 
+use GatedAccess\Cookies;
 use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
@@ -37,10 +38,10 @@ class Test_Sign_In_Form extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 		reset_phpmailer_instance();
-		add_filter( 'gaa_send_session_cookie', '__return_false' );
+		add_filter( 'gaa_send_cookies', '__return_false' );
 
 		$this->identities = new Identities();
-		$this->session    = new Session( $this->identities, new Hmac() );
+		$this->session    = new Session( $this->identities, new Hmac(), new Cookies() );
 
 		$_SERVER['REQUEST_METHOD'] = 'POST';
 		$_SERVER['REMOTE_ADDR']    = '203.0.113.10';

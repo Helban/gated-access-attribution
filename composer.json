@@ -26,8 +26,16 @@
 		"lint": "phpcs",
 		"lint:fix": "phpcbf",
 		"test": [
+			"@test:hpos",
+			"@test:posts"
+		],
+		"test:hpos": [
 			"Composer\\Config::disableProcessTimeout",
-			"npx wp-env run tests-cli --env-cwd=wp-content/plugins/gated-access-attribution vendor/bin/phpunit"
+			"npx wp-env run tests-cli --env-cwd=wp-content/plugins/gated-access-attribution env GAA_TEST_ORDER_STORAGE=hpos vendor/bin/phpunit"
+		],
+		"test:posts": [
+			"Composer\\Config::disableProcessTimeout",
+			"npx wp-env run tests-cli --env-cwd=wp-content/plugins/gated-access-attribution env GAA_TEST_ORDER_STORAGE=posts vendor/bin/phpunit"
 		]
 	}
 }

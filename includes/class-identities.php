@@ -79,6 +79,31 @@ final class Identities {
 	}
 
 	/**
+	 * Gives the identity a rep, but only if it has none yet: the first rep wins.
+	 *
+	 * The condition is in the UPDATE itself, so two racing requests cannot both
+	 * assign a rep.
+	 *
+	 * @param int    $identity_id Identity ID.
+	 * @param string $rep_code    A configured rep code.
+	 * @return bool Whether the rep was assigned.
+	 */
+	public function assign_rep_if_unassigned( int $identity_id, string $rep_code ): bool {
+		global $wpdb;
+
+		$updated = $wpdb->query(
+			$wpdb->prepare(
+				'UPDATE %i SET rep_code = %s WHERE id = %d AND rep_code IS NULL',
+				$this->table(),
+				$rep_code,
+				$identity_id
+			)
+		);
+
+		return 1 === $updated;
+	}
+
+	/**
 	 * Prefixed table name.
 	 */
 	private function table(): string {

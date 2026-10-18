@@ -22,19 +22,17 @@ final class Session {
 	public const LIFETIME = 14 * DAY_IN_SECONDS;
 
 	/**
-	 * Verified identity per cookie value, so repeated checks in one request cost one query.
-	 *
-	 * @var array<string, Identity|null>
-	 */
-	private array $resolved = array();
-
-	/**
 	 * Sets up the session.
 	 *
 	 * @param Identities $identities Identity repository.
 	 * @param Hmac       $hmac       Keyed digests.
+	 * @param Cookies    $cookies    Cookie access.
 	 */
-	public function __construct( private readonly Identities $identities, private readonly Hmac $hmac ) {
+	public function __construct(
+		private readonly Identities $identities,
+		private readonly Hmac $hmac,
+		private readonly Cookies $cookies,
+	) {
 	}
 
 	/**
@@ -46,40 +44,24 @@ final class Session {
 		$expires = time() + self::LIFETIME;
 		$payload = $identity->id . '|' . $expires;
 
-		$this->write_cookie( $payload . '|' . $this->hmac->digest( 'session', $payload ), $expires );
+		$this->cookies->set( self::COOKIE, $payload . '|' . $this->hmac->digest( 'session', $payload ), $expires );
 	}
 
 	/**
 	 * Signs the visitor out.
 	 */
 	public function end(): void {
-		$this->write_cookie( '', time() - YEAR_IN_SECONDS );
+		$this->cookies->delete( self::COOKIE );
 	}
 
 	/**
 	 * Returns the signed-in identity, or null for an anonymous or invalid session.
+	 *
+	 * Not memoised: it is one primary-key query, and a cached identity could
+	 * miss a rep assigned earlier in the same request.
 	 */
 	public function current_identity(): ?Identity {
-		$cookie = isset( $_COOKIE[ self::COOKIE ] ) ? sanitize_text_field( wp_unslash( $_COOKIE[ self::COOKIE ] ) ) : '';
-
-		if ( '' === $cookie ) {
-			return null;
-		}
-
-		if ( ! array_key_exists( $cookie, $this->resolved ) ) {
-			$this->resolved[ $cookie ] = $this->resolve( $cookie );
-		}
-
-		return $this->resolved[ $cookie ];
-	}
-
-	/**
-	 * Checks the cookie's signature and expiry, then loads its identity.
-	 *
-	 * @param string $cookie Raw cookie value.
-	 */
-	private function resolve( string $cookie ): ?Identity {
-		$parts = explode( '|', $cookie );
+		$parts = explode( '|', $this->cookies->get( self::COOKIE ) );
 
 		if ( 3 !== count( $parts ) ) {
 			return null;
@@ -98,43 +80,5 @@ final class Session {
 		$identity = $this->identities->find( (int) $identity_id );
 
 		return null !== $identity && $identity->is_verified() ? $identity : null;
-	}
-
-	/**
-	 * Sends the cookie and mirrors it into $_COOKIE for the rest of this request.
-	 *
-	 * @param string $value   Cookie value, empty to delete.
-	 * @param int    $expires Unix expiry time.
-	 */
-	private function write_cookie( string $value, int $expires ): void {
-		/**
-		 * Filters whether the session cookie is sent to the browser.
-		 *
-		 * Same role as core's send_auth_cookies: code that runs after headers
-		 * are out, such as tests, can turn the Set-Cookie header off.
-		 *
-		 * @param bool $send Whether to send the cookie.
-		 */
-		if ( apply_filters( 'gaa_send_session_cookie', true ) ) {
-			setcookie(
-				self::COOKIE,
-				$value,
-				array(
-					'expires'  => $expires,
-					'path'     => COOKIEPATH,
-					'domain'   => COOKIE_DOMAIN,
-					'secure'   => is_ssl(),
-					'httponly' => true,
-					'samesite' => 'Lax',
-				)
-			);
-		}
-
-		if ( '' === $value ) {
-			unset( $_COOKIE[ self::COOKIE ] );
-			return;
-		}
-
-		$_COOKIE[ self::COOKIE ] = $value;
 	}
 }

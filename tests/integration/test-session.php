@@ -5,6 +5,7 @@
  * @package GatedAccess
  */
 
+use GatedAccess\Cookies;
 use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
@@ -31,10 +32,10 @@ class Test_Session extends WP_UnitTestCase {
 
 	public function set_up(): void {
 		parent::set_up();
-		add_filter( 'gaa_send_session_cookie', '__return_false' );
+		add_filter( 'gaa_send_cookies', '__return_false' );
 
 		$this->identities = new Identities();
-		$this->session    = new Session( $this->identities, new Hmac() );
+		$this->session    = new Session( $this->identities, new Hmac(), new Cookies() );
 	}
 
 	public function tear_down(): void {
@@ -47,7 +48,7 @@ class Test_Session extends WP_UnitTestCase {
 
 		$this->session->start( $identity );
 
-		$this->assertSame( $identity->id, $this->fresh_session()->current_identity()?->id );
+		$this->assertSame( $identity->id, $this->session->current_identity()?->id );
 	}
 
 	public function test_no_cookie_means_no_identity(): void {
@@ -63,7 +64,7 @@ class Test_Session extends WP_UnitTestCase {
 		list( , $expires, $signature ) = explode( '|', $issued );
 		$_COOKIE[ Session::COOKIE ]    = "{$other->id}|{$expires}|{$signature}";
 
-		$this->assertNull( $this->fresh_session()->current_identity() );
+		$this->assertNull( $this->session->current_identity() );
 	}
 
 	public function test_expired_cookie_is_rejected_even_with_a_valid_signature(): void {
@@ -72,7 +73,7 @@ class Test_Session extends WP_UnitTestCase {
 
 		$_COOKIE[ Session::COOKIE ] = $payload . '|' . ( new Hmac() )->digest( 'session', $payload );
 
-		$this->assertNull( $this->fresh_session()->current_identity() );
+		$this->assertNull( $this->session->current_identity() );
 	}
 
 	public function test_deleting_the_identity_ends_its_session(): void {
@@ -82,7 +83,7 @@ class Test_Session extends WP_UnitTestCase {
 		$this->session->start( $identity );
 		$wpdb->delete( $wpdb->prefix . 'gaa_identities', array( 'id' => $identity->id ) );
 
-		$this->assertNull( $this->fresh_session()->current_identity() );
+		$this->assertNull( $this->session->current_identity() );
 	}
 
 	public function test_malformed_cookie_is_rejected(): void {
@@ -96,13 +97,6 @@ class Test_Session extends WP_UnitTestCase {
 
 		$this->session->end();
 
-		$this->assertNull( $this->fresh_session()->current_identity() );
-	}
-
-	/**
-	 * A session object with no per-request memo, as the next request would see it.
-	 */
-	private function fresh_session(): Session {
-		return new Session( $this->identities, new Hmac() );
+		$this->assertNull( $this->session->current_identity() );
 	}
 }

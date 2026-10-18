@@ -5,6 +5,7 @@
  * @package GatedAccess
  */
 
+use GatedAccess\Cookies;
 use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
@@ -22,11 +23,11 @@ trait GAA_Test_Helpers {
 	 * @param string $email Buyer email address.
 	 */
 	protected function sign_in_as( string $email ): Identity {
-		add_filter( 'gaa_send_session_cookie', '__return_false' );
+		add_filter( 'gaa_send_cookies', '__return_false' );
 
 		$identities = new Identities();
 		$identity   = $identities->record_verification( Email_Address::parse( $email ) );
-		( new Session( $identities, new Hmac() ) )->start( $identity );
+		( new Session( $identities, new Hmac(), new Cookies() ) )->start( $identity );
 
 		return $identity;
 	}

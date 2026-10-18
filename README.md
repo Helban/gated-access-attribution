@@ -8,6 +8,13 @@ Work in progress. `NOTES.md` lists what is built so far.
 
 - WordPress 7.1, WooCommerce 11.2, PHP 8.1 or newer. Those are the tested versions; older ones may work but have not been tried.
 
+## Configuration
+
+WooCommerce > Settings > Gated access has two fields.
+
+- Sign-in page: the page holding the `[gaa_sign_in]` shortcode. Activation creates one at `/sign-in/`.
+- Sales reps: one rep per line, the code, a colon, then the name, for example `anna: Anna Kowalska`. Codes may use `a-z`, `0-9`, hyphen and underscore, up to 32 characters; they are lower-cased on save, and lines that do not fit are reported and dropped. A rep's referral link is any page of the store with `?ref=<code>` added, for example `https://shop.example/?ref=anna`.
+
 ## Signing in
 
 Activation creates a page at `/sign-in/` containing the `[gaa_sign_in]` shortcode, and stores its ID in the `gaa_sign_in_page_id` option. The shortcode can live on any page, but the plugin links to that one.
@@ -16,6 +23,14 @@ Activation creates a page at `/sign-in/` containing the `[gaa_sign_in]` shortcod
 2. The visitor enters the code. On success the plugin creates the identity (first time) or refreshes `verified_at`, fires `gaa_identity_verified`, sets the session cookie and redirects to the page the visitor came from (or the shop page).
 
 Anyone who can read mail at an address can sign in. Restricting who counts as an approved buyer is an open question in `NOTES.md`.
+
+## Referral attribution
+
+1. A visitor opens a link with `?ref=anna`. If `anna` is a configured rep, the code goes into the `gaa_ref` cookie for 30 days. Unknown codes are ignored. Until the visitor signs in, the most recent rep link wins.
+2. When the visitor verifies their email, the rep from the cookie is written to `gaa_identities.rep_code`, but only if the identity has no rep yet. The first rep wins; changing it later is an explicit act from the admin screen or the webhook. The cookie is then deleted.
+3. At checkout the plugin reads the signed-in identity from the session cookie, loads it from the database, and writes `_gaa_identity_id` and `_gaa_rep_code` to the order with `WC_Order::update_meta_data()` and `save()`. The `gaa_ref` cookie plays no part at this point, so editing it cannot move an order to another rep.
+
+Both checkouts are covered: the classic shortcode checkout through `woocommerce_checkout_order_processed` and the block checkout through `woocommerce_store_api_checkout_order_processed`. If the block checkout processes the same draft order twice (a failed payment, then a retry), the first attribution is kept. The rep's name and code show on the order edit screen, with HPOS on or off.
 
 ## Security model
 
@@ -49,6 +64,8 @@ The plugin keeps its data in four tables of its own instead of postmeta or optio
 
 `gaa_otp_requests` stores no plain email address or IP, only HMAC-SHA256 digests keyed with a WordPress salt. Someone who holds both the database and `wp-config.php` can still test a guessed address against a digest; someone with only a database dump cannot.
 
+Orders carry two meta keys, written through the WooCommerce CRUD API so they land in `wc_orders_meta` under HPOS and in `postmeta` otherwise: `_gaa_identity_id` and `_gaa_rep_code`.
+
 Deleting the plugin from the Plugins screen runs `uninstall.php`, which drops the four tables and deletes the plugin's options. Attribution already written to orders stays, because it is part of the store's sales records.
 
 ## Development
@@ -59,9 +76,11 @@ You need Docker, Node 22, PHP 8.1+ and Composer.
 npm ci
 composer install
 npx wp-env start      # WordPress on http://localhost:8888, admin / password
-composer test         # PHPUnit inside the wp-env tests container
+composer test         # PHPUnit inside wp-env, once with HPOS and once with posts storage
 composer lint         # PHPCS with WordPress Coding Standards
 ```
+
+`composer test:hpos` and `composer test:posts` run a single pass. Order storage is chosen once per PHPUnit process through the `GAA_TEST_ORDER_STORAGE` environment variable, because WooCommerce does not switch order data stores cleanly in the middle of a process.
 
 `.wp-env.json` pins WordPress 7.1.3, WooCommerce 11.2.1 and PHP 8.3. The plugin is mounted as `wp-content/plugins/gated-access-attribution`.
 

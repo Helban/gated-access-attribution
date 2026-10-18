@@ -34,6 +34,18 @@
 		</properties>
 	</rule>
 
+	<!--
+	The plugin's data lives in its own tables, which have no WordPress API, so
+	queries on them are direct by design. They are not object-cached on purpose:
+	OTP attempts and rate limits must never be read stale.
+	-->
+	<rule ref="WordPress.DB.DirectDatabaseQuery.DirectQuery">
+		<severity>0</severity>
+	</rule>
+	<rule ref="WordPress.DB.DirectDatabaseQuery.NoCaching">
+		<severity>0</severity>
+	</rule>
+
 	<!-- Test method names state the behaviour under test; a docblock would only repeat them. -->
 	<rule ref="Squiz.Commenting.FunctionComment.Missing">
 		<exclude-pattern>/tests/*</exclude-pattern>

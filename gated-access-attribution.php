@@ -27,8 +27,18 @@ const PLUGIN_FILE = __FILE__;
 
 require_once __DIR__ . '/includes/autoload.php';
 
+register_activation_hook( __FILE__, __NAMESPACE__ . '\activate' );
 add_action( 'before_woocommerce_init', __NAMESPACE__ . '\declare_woocommerce_compatibility' );
 add_action( 'plugins_loaded', __NAMESPACE__ . '\boot' );
+
+/**
+ * Creates the plugin's tables on activation.
+ */
+function activate(): void {
+	global $wpdb;
+
+	( new Schema( $wpdb ) )->install();
+}
 
 /**
  * Tells WooCommerce which of its optional features this plugin supports.

@@ -1,0 +1,33 @@
+{
+	"name": "helban/gated-access-attribution",
+	"description": "WooCommerce plugin: catalog gated behind email one-time codes, with server-side sales rep attribution on orders.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"require": {
+		"php": ">=8.1"
+	},
+	"require-dev": {
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.2",
+		"phpcompatibility/phpcompatibility-wp": "^2.1.8",
+		"phpunit/phpunit": "^9.6",
+		"wp-coding-standards/wpcs": "^3.4",
+		"yoast/phpunit-polyfills": "^4.0"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		},
+		"platform": {
+			"php": "8.1.0"
+		},
+		"sort-packages": true
+	},
+	"scripts": {
+		"lint": "phpcs",
+		"lint:fix": "phpcbf",
+		"test": [
+			"Composer\\Config::disableProcessTimeout",
+			"npx wp-env run tests-cli --env-cwd=wp-content/plugins/gated-access-attribution vendor/bin/phpunit"
+		]
+	}
+}

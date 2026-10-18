@@ -24,6 +24,28 @@ Activation creates a page at `/sign-in/` containing the `[gaa_sign_in]` shortcod
 
 Anyone who can read mail at an address can sign in. Restricting who counts as an approved buyer is an open question in `NOTES.md`.
 
+## Catalog gating
+
+A visitor has catalog access if they have a verified session or the `manage_woocommerce` capability (shop managers and administrators). The `gaa_catalog_access` filter can widen or narrow that.
+
+Without access:
+
+| Entry point | What happens |
+| --- | --- |
+| Shop, product, product category/tag/brand, cart and checkout pages | 302 to the sign-in page, with `redirect_to` set to the requested URL |
+| Store API (`/wc/store/...`, every version, including batch) | 401 `gaa_sign_in_required` |
+| WooCommerce REST products (`/wc/v1/products`, `/wc/v2/products`, `/wc/v3/products` and their sub-routes) | 401, or 403 for a logged-in user without access |
+| WordPress REST `/wp/v2/product`, `product_cat`, `product_tag`, `product_brand` | 401 or 403 |
+| `?wc-ajax=` endpoints (for example `get_variation`, `checkout`) | 401 JSON, before WooCommerce handles the request |
+| `?add-to-cart=` links and add-to-cart buttons | refused with a notice |
+| Classic checkout submission | refused with a validation error |
+
+REST routes are matched on the pattern they were registered with (through `rest_dispatch_request`), not on the request path, so upper-case paths or the unversioned `/wc/store/` aliases do not get around it.
+
+Products are also kept out of places outside the gated pages: front-end and REST `WP_Query` calls (site search, `/wp/v2/search`, query loop blocks), WooCommerce product shortcodes, WooCommerce blocks other than the account link and store notices, oEmbed responses for products, and the XML sitemap (products and product taxonomies are left out for everyone).
+
+Catalog pages are sent with `nocache_headers()` and `DONOTCACHEPAGE` for every visitor, because their content depends on who is asking.
+
 ## Referral attribution
 
 1. A visitor opens a link with `?ref=anna`. If `anna` is a configured rep, the code goes into the `gaa_ref` cookie for 30 days. Unknown codes are ignored. Until the visitor signs in, the most recent rep link wins.

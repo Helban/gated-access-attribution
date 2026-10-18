@@ -34,6 +34,15 @@
 		</properties>
 	</rule>
 
+	<!-- Registered by WooCommerce on install. -->
+	<rule ref="WordPress.WP.Capabilities">
+		<properties>
+			<property name="custom_capabilities" type="array">
+				<element value="manage_woocommerce"/>
+			</property>
+		</properties>
+	</rule>
+
 	<!--
 	The plugin's data lives in its own tables, which have no WordPress API, so
 	queries on them are direct by design. They are not object-cached on purpose:

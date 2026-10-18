@@ -111,7 +111,9 @@ class Test_Order_Attribution extends WP_UnitTestCase {
 		$this->assertSame( '', $order->get_meta( Order_Attribution::REP_META ) );
 	}
 
-	public function test_order_without_a_session_is_left_alone(): void {
+	public function test_staff_order_without_a_buyer_session_is_left_alone(): void {
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'shop_manager' ) ) );
+
 		$order = $this->place_classic_checkout_order();
 
 		$this->assertSame( '', $order->get_meta( Order_Attribution::IDENTITY_META ) );

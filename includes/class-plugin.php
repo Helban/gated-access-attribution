@@ -66,6 +66,20 @@ final class Plugin {
 	private Settings $settings;
 
 	/**
+	 * Gate on catalog pages, REST, wc-ajax, cart and checkout.
+	 *
+	 * @var Catalog_Gate
+	 */
+	private Catalog_Gate $catalog_gate;
+
+	/**
+	 * Product hiding outside the gated pages.
+	 *
+	 * @var Catalog_Visibility
+	 */
+	private Catalog_Visibility $catalog_visibility;
+
+	/**
 	 * Builds the services.
 	 */
 	public function __construct() {
@@ -74,14 +88,18 @@ final class Plugin {
 		$identities = new Identities();
 		$rep_codes  = new Rep_Codes();
 		$session    = new Session( $identities, $hmac, $cookies );
+		$page       = new Sign_In_Page();
+		$access     = new Catalog_Access( $session );
 
-		$this->schema            = new Schema();
-		$this->otp               = new Otp_Service( $hmac );
-		$this->audit_log         = new Audit_Log();
-		$this->sign_in_form      = new Sign_In_Form( $this->otp, $identities, $session, new Sign_In_Page() );
-		$this->referral          = new Referral( $rep_codes, $identities, $this->audit_log, $cookies );
-		$this->order_attribution = new Order_Attribution( $session, $rep_codes, $this->audit_log );
-		$this->settings          = new Settings( $rep_codes );
+		$this->schema             = new Schema();
+		$this->otp                = new Otp_Service( $hmac );
+		$this->audit_log          = new Audit_Log();
+		$this->sign_in_form       = new Sign_In_Form( $this->otp, $identities, $session, $page );
+		$this->referral           = new Referral( $rep_codes, $identities, $this->audit_log, $cookies );
+		$this->order_attribution  = new Order_Attribution( $session, $rep_codes, $this->audit_log );
+		$this->settings           = new Settings( $rep_codes );
+		$this->catalog_gate       = new Catalog_Gate( $access, $page );
+		$this->catalog_visibility = new Catalog_Visibility( $access );
 	}
 
 	/**
@@ -99,6 +117,8 @@ final class Plugin {
 		$this->referral->register_hooks();
 		$this->order_attribution->register_hooks();
 		$this->settings->register_hooks();
+		$this->catalog_gate->register_hooks();
+		$this->catalog_visibility->register_hooks();
 	}
 
 	/**

@@ -87,6 +87,13 @@ final class Plugin {
 	private Webhook_Controller $webhook;
 
 	/**
+	 * Buyer identities admin screen.
+	 *
+	 * @var Admin\Identity_Screen
+	 */
+	private Admin\Identity_Screen $identity_screen;
+
+	/**
 	 * Builds the services.
 	 */
 	public function __construct() {
@@ -108,6 +115,7 @@ final class Plugin {
 		$this->catalog_gate       = new Catalog_Gate( $access, $page );
 		$this->catalog_visibility = new Catalog_Visibility( $access );
 		$this->webhook            = new Webhook_Controller( $identities, $rep_codes, new Processed_Events(), $this->audit_log );
+		$this->identity_screen    = new Admin\Identity_Screen( $identities, $rep_codes, $this->audit_log );
 	}
 
 	/**
@@ -128,6 +136,7 @@ final class Plugin {
 		$this->catalog_gate->register_hooks();
 		$this->catalog_visibility->register_hooks();
 		$this->webhook->register_hooks();
+		$this->identity_screen->register_hooks();
 	}
 
 	/**

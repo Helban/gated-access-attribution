@@ -41,6 +41,62 @@ final class Audit_Log {
 	}
 
 	/**
+	 * An identity's history, newest first.
+	 *
+	 * @param int $identity_id Identity ID.
+	 * @param int $limit       Most entries to return.
+	 * @return Audit_Entry[]
+	 */
+	public function for_identity( int $identity_id, int $limit = 100 ): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare(
+				'SELECT event, actor, context, created_at FROM %i WHERE identity_id = %d ORDER BY id DESC LIMIT %d',
+				$wpdb->prefix . Schema::AUDIT_LOG,
+				$identity_id,
+				$limit
+			)
+		);
+
+		return array_map( array( Audit_Entry::class, 'from_row' ), $rows );
+	}
+
+	/**
+	 * IDs of the orders attributed to an identity, newest first.
+	 *
+	 * Read from this log rather than from order meta, because wc_get_orders()
+	 * only accepts meta_query under HPOS; this way the answer is the same on
+	 * both order storages.
+	 *
+	 * @param int $identity_id Identity ID.
+	 * @param int $limit       Most orders to return.
+	 * @return int[]
+	 */
+	public function attributed_order_ids( int $identity_id, int $limit ): array {
+		global $wpdb;
+
+		$contexts = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT context FROM %i WHERE identity_id = %d AND event = 'order.attributed' ORDER BY id DESC LIMIT %d",
+				$wpdb->prefix . Schema::AUDIT_LOG,
+				$identity_id,
+				$limit
+			)
+		);
+
+		$order_ids = array();
+		foreach ( $contexts as $context ) {
+			$decoded = json_decode( (string) $context, true );
+			if ( is_array( $decoded ) && isset( $decoded['order_id'] ) ) {
+				$order_ids[] = (int) $decoded['order_id'];
+			}
+		}
+
+		return $order_ids;
+	}
+
+	/**
 	 * Records a successful sign-in.
 	 *
 	 * @param Identity $identity The identity that just verified.

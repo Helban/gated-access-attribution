@@ -45,6 +45,22 @@ final class Identities {
 	}
 
 	/**
+	 * The most recently verified identities.
+	 *
+	 * @param int $limit Most identities to return.
+	 * @return Identity[]
+	 */
+	public function recently_verified( int $limit ): array {
+		global $wpdb;
+
+		$rows = $wpdb->get_results(
+			$wpdb->prepare( 'SELECT * FROM %i ORDER BY verified_at DESC, id DESC LIMIT %d', $this->table(), $limit )
+		);
+
+		return array_map( array( Identity::class, 'from_row' ), $rows );
+	}
+
+	/**
 	 * Marks the address as verified now, creating its identity on first sign-in.
 	 *
 	 * A single upsert, so two verifications racing for a new address cannot

@@ -25,14 +25,6 @@ final class Schema {
 	public const AUDIT_LOG        = 'gaa_audit_log';
 
 	/**
-	 * Sets up the schema manager.
-	 *
-	 * @param \wpdb $wpdb WordPress database connection.
-	 */
-	public function __construct( private readonly \wpdb $wpdb ) {
-	}
-
-	/**
 	 * Runs the installer when the stored schema version is older than this code's.
 	 */
 	public function maybe_upgrade(): void {
@@ -60,9 +52,11 @@ final class Schema {
 	 * Drops every table the plugin owns.
 	 */
 	public function drop_tables(): void {
+		global $wpdb;
+
 		foreach ( $this->table_names() as $table ) {
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Table names are built from the DB prefix and class constants; identifiers cannot be bound as placeholders.
-			$this->wpdb->query( "DROP TABLE IF EXISTS `{$table}`" );
+			$wpdb->query( "DROP TABLE IF EXISTS `{$table}`" );
 		}
 	}
 
@@ -72,8 +66,10 @@ final class Schema {
 	 * @return string[]
 	 */
 	public function table_names(): array {
+		global $wpdb;
+
 		return array_map(
-			fn ( string $table ): string => $this->wpdb->prefix . $table,
+			fn ( string $table ): string => $wpdb->prefix . $table,
 			array( self::IDENTITIES, self::OTP_REQUESTS, self::PROCESSED_EVENTS, self::AUDIT_LOG )
 		);
 	}
@@ -89,8 +85,10 @@ final class Schema {
 	 * @return string[]
 	 */
 	private function table_definitions(): array {
-		$prefix          = $this->wpdb->prefix;
-		$charset_collate = $this->wpdb->get_charset_collate();
+		global $wpdb;
+
+		$prefix          = $wpdb->prefix;
+		$charset_collate = $wpdb->get_charset_collate();
 
 		return array(
 			"CREATE TABLE {$prefix}" . self::IDENTITIES . " (

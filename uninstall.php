@@ -14,8 +14,13 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 
 require_once __DIR__ . '/includes/autoload.php';
 
-( new Schema( $GLOBALS['wpdb'] ) )->drop_tables();
+( new Schema() )->drop_tables();
 
-foreach ( array( Schema::VERSION_OPTION ) as $gaa_option ) {
+// Without the plugin, the page it created would only show a raw shortcode.
+( new Sign_In_Page() )->delete_created_pages();
+
+foreach ( array( Schema::VERSION_OPTION, Sign_In_Page::OPTION ) as $gaa_option ) {
 	delete_option( $gaa_option );
 }
+
+wp_clear_scheduled_hook( Plugin::PRUNE_HOOK );

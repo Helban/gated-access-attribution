@@ -6,6 +6,7 @@
 		"https://downloads.wordpress.org/plugin/woocommerce.11.2.1.zip"
 	],
 	"mappings": {
-		"wp-content/plugins/gated-access-attribution": "."
+		"wp-content/plugins/gated-access-attribution": ".",
+		"wp-content/mu-plugins/gaa-dev-mailpit.php": "./dev/mailpit.php"
 	}
 }

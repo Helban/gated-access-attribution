@@ -31,6 +31,13 @@ tests_add_filter(
 	}
 );
 
+// wp-env serves the test site from localhost, which makes WordPress's default
+// sender "wordpress@localhost". is_email() rejects that, so wp_mail() would fail.
+tests_add_filter(
+	'wp_mail_from',
+	static fn (): string => 'store@example.org'
+);
+
 tests_add_filter(
 	'setup_theme',
 	static function (): void {
@@ -39,7 +46,14 @@ tests_add_filter(
 		// WooCommerce adds roles during install; rebuild them so capability checks see them.
 		$GLOBALS['wp_roles'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Same reset WooCommerce's own test bootstrap does.
 		wp_roles();
+
+		// WordPress's installer recreates core tables on every run; do the same for the plugin's,
+		// so they always match the definitions in Schema.
+		( new GatedAccess\Schema() )->drop_tables();
+		GatedAccess\activate();
 	}
 );
 
 require_once $gaa_tests_dir . '/includes/bootstrap.php';
+require_once __DIR__ . '/support/class-gaa-redirect-intercepted.php';
+require_once __DIR__ . '/support/trait-gaa-test-helpers.php';

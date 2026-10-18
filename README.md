@@ -8,6 +8,34 @@ Work in progress. `NOTES.md` lists what is built so far.
 
 - WordPress 7.1, WooCommerce 11.2, PHP 8.1 or newer. Those are the tested versions; older ones may work but have not been tried.
 
+## Signing in
+
+Activation creates a page at `/sign-in/` containing the `[gaa_sign_in]` shortcode, and stores its ID in the `gaa_sign_in_page_id` option. The shortcode can live on any page, but the plugin links to that one.
+
+1. The visitor enters an email address. The plugin emails a six-digit code.
+2. The visitor enters the code. On success the plugin creates the identity (first time) or refreshes `verified_at`, fires `gaa_identity_verified`, sets the session cookie and redirects to the page the visitor came from (or the shop page).
+
+Anyone who can read mail at an address can sign in. Restricting who counts as an approved buyer is an open question in `NOTES.md`.
+
+## Security model
+
+### Sign-in codes
+
+- Codes are six digits from `random_int()`. Each is valid for 10 minutes and works once.
+- The database never holds a code, only an HMAC-SHA256 of it keyed with `wp_salt( 'auth' )` and bound to a digest of the address it was sent to. Codes are compared with `hash_equals()`.
+- Each code allows 5 attempts. The attempt counter is raised by a conditional `UPDATE` before the comparison, so parallel guesses cannot get past the limit.
+- Requesting a new code retires every earlier code for the address, so there is only ever one live code per address.
+- Rate limits: 3 codes per address per 15 minutes, 10 codes per IP per hour, both counted from `gaa_otp_requests`. The IP is `REMOTE_ADDR`. Behind a reverse proxy you control, return the real client address from the `gaa_client_ip` filter; forwarded headers are not trusted by default.
+- No account enumeration. Requesting a code runs the same queries and sends the same email whether or not the address belongs to an identity, and identities are only created on the first successful verification. Every verification failure (no code, wrong, expired, used, out of attempts) gives the same message.
+- A daily cron event deletes `gaa_otp_requests` rows older than 24 hours.
+- Failed `wp_mail()` calls are written to the WooCommerce log (source `gated-access-attribution`) without the recipient address.
+
+### Form and session
+
+- Each form step checks a WordPress nonce and rejects POSTs whose `Origin` header names another host. The nonce alone is weak for logged-out visitors, because WordPress gives them all the same one.
+- `redirect_to` goes through `wp_validate_redirect()`, so a link can only send the buyer to a page on this site.
+- The session cookie `gaa_session` holds `identity id|expiry|HMAC`. It is `HttpOnly`, `SameSite=Lax`, `Secure` on HTTPS, and lasts 14 days. The identity is re-read from the database on each request, so deleting an identity ends its sessions.
+
 ## Data model
 
 The plugin keeps its data in four tables of its own instead of postmeta or options. They are created with `dbDelta()` on activation. The schema version is stored in the `gaa_db_version` option, and the installer runs again on `init` whenever that stored version is older than the code's. All datetimes are UTC.
@@ -36,3 +64,12 @@ composer lint         # PHPCS with WordPress Coding Standards
 ```
 
 `.wp-env.json` pins WordPress 7.1.3, WooCommerce 11.2.1 and PHP 8.3. The plugin is mounted as `wp-content/plugins/gated-access-attribution`.
+
+### Seeing the sign-in emails
+
+```sh
+npm run mail:start    # Mailpit, web UI on http://localhost:8025
+npm run mail:stop
+```
+
+`dev/mailpit.php` is mounted into the wp-env site as a must-use plugin. It sends all mail over SMTP to `host.docker.internal:1025` and sets the sender to `store@example.test`, because WordPress's default sender on a localhost site (`wordpress@localhost`) fails its own address check. It is not part of the plugin.

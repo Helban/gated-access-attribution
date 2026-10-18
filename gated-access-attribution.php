@@ -28,16 +28,23 @@ const PLUGIN_FILE = __FILE__;
 require_once __DIR__ . '/includes/autoload.php';
 
 register_activation_hook( __FILE__, __NAMESPACE__ . '\activate' );
+register_deactivation_hook( __FILE__, __NAMESPACE__ . '\deactivate' );
 add_action( 'before_woocommerce_init', __NAMESPACE__ . '\declare_woocommerce_compatibility' );
 add_action( 'plugins_loaded', __NAMESPACE__ . '\boot' );
 
 /**
- * Creates the plugin's tables on activation.
+ * Creates the plugin's tables and its sign-in page.
  */
 function activate(): void {
-	global $wpdb;
+	( new Schema() )->install();
+	( new Sign_In_Page() )->ensure_exists();
+}
 
-	( new Schema( $wpdb ) )->install();
+/**
+ * Stops scheduled cleanup while the plugin is inactive.
+ */
+function deactivate(): void {
+	wp_clear_scheduled_hook( Plugin::PRUNE_HOOK );
 }
 
 /**

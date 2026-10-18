@@ -22,7 +22,7 @@ class Test_Schema extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 
-		$this->schema = new Schema( $GLOBALS['wpdb'] );
+		$this->schema = new Schema();
 	}
 
 	public function test_every_table_exists_after_install(): void {

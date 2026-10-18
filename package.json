@@ -6,7 +6,9 @@
   "scripts": {
     "env:start": "wp-env start",
     "env:stop": "wp-env stop",
-    "env:destroy": "wp-env destroy"
+    "env:destroy": "wp-env destroy",
+    "mail:start": "docker run -d --rm --name gaa-mailpit -p 8025:8025 -p 1025:1025 axllent/mailpit:v1.31.4",
+    "mail:stop": "docker stop gaa-mailpit"
   },
   "devDependencies": {
     "@wordpress/env": "11.17.0"

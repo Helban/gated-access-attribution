@@ -10,10 +10,11 @@ Work in progress. `NOTES.md` lists what is built so far.
 
 ## Configuration
 
-WooCommerce > Settings > Gated access has two fields.
+WooCommerce > Settings > Gated access has three fields.
 
 - Sign-in page: the page holding the `[gaa_sign_in]` shortcode. Activation creates one at `/sign-in/`.
 - Sales reps: one rep per line, the code, a colon, then the name, for example `anna: Anna Kowalska`. Codes may use `a-z`, `0-9`, hyphen and underscore, up to 32 characters; they are lower-cased on save, and lines that do not fit are reported and dropped. A rep's referral link is any page of the store with `?ref=<code>` added, for example `https://shop.example/?ref=anna`.
+- Webhook secret: the shared secret for the webhook below. Activation generates a random 64-character value. Anything shorter than 32 characters is refused on save, and the old value is kept. The option is not autoloaded.
 
 ## Signing in
 
@@ -54,6 +55,41 @@ Catalog pages are sent with `nocache_headers()` and `DONOTCACHEPAGE` for every v
 
 Both checkouts are covered: the classic shortcode checkout through `woocommerce_checkout_order_processed` and the block checkout through `woocommerce_store_api_checkout_order_processed`. If the block checkout processes the same draft order twice (a failed payment, then a retry), the first attribution is kept. The rep's name and code show on the order edit screen, with HPOS on or off.
 
+## Webhook
+
+`POST /wp-json/gated-access/v1/events` lets another system, such as a CRM, move a buyer to another rep.
+
+```json
+{
+  "event_id": "crm-1842",
+  "type": "identity.rep_reassigned",
+  "data": { "email": "buyer@example.com", "rep_code": "ben" }
+}
+```
+
+The `X-GAA-Signature` header must be `sha256=` followed by the hex HMAC-SHA256 of the exact request body, keyed with the webhook secret:
+
+```sh
+body='{"event_id":"crm-1842","type":"identity.rep_reassigned","data":{"email":"buyer@example.com","rep_code":"ben"}}'
+signature=$(printf '%s' "$body" | openssl dgst -sha256 -hmac "$GAA_WEBHOOK_SECRET" | sed 's/^.* //')
+curl -X POST https://shop.example/wp-json/gated-access/v1/events \
+  -H 'Content-Type: application/json' \
+  -H "X-GAA-Signature: sha256=$signature" \
+  --data "$body"
+```
+
+| Response | Meaning |
+| --- | --- |
+| 200 `processed` | The buyer now has the new rep; a `rep.reassigned` audit entry records the change with actor `webhook:<event_id>` |
+| 200 `unchanged` | The buyer already had that rep |
+| 200 `duplicate` | This `event_id` was processed before; nothing changed |
+| 400 | The body does not match the schema (`event_id` is 1 to 128 of `A-Z a-z 0-9 . _ : -`) |
+| 401 | Missing or wrong signature, or no secret of at least 32 characters is configured |
+| 404 | No identity has that email address |
+| 422 | The rep code is not configured |
+
+Each `event_id` is applied at most once. It is claimed in `gaa_processed_events` (unique key) before anything changes, so two identical deliveries arriving together cannot both apply. A 404 or 422 releases the claim, so the sender can deliver the same event again once the buyer or rep exists. Orders placed before a reassignment keep the rep they were attributed to.
+
 ## Security model
 
 ### Sign-in codes
@@ -66,6 +102,12 @@ Both checkouts are covered: the classic shortcode checkout through `woocommerce_
 - No account enumeration. Requesting a code runs the same queries and sends the same email whether or not the address belongs to an identity, and identities are only created on the first successful verification. Every verification failure (no code, wrong, expired, used, out of attempts) gives the same message.
 - A daily cron event deletes `gaa_otp_requests` rows older than 24 hours.
 - Failed `wp_mail()` calls are written to the WooCommerce log (source `gated-access-attribution`) without the recipient address.
+
+### Webhook
+
+- `permission_callback` recomputes `HMAC-SHA256(raw body, secret)` and compares it with the `X-GAA-Signature` header through `hash_equals()`. With no secret, or one shorter than 32 characters, every request is refused.
+- Refused requests are logged to the WooCommerce log (source `gated-access-attribution`) without the body or the secret.
+- There is no timestamp in the signature. A captured request can be replayed, but a replay carries an `event_id` already processed, so it changes nothing.
 
 ### Form and session
 

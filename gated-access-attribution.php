@@ -33,11 +33,14 @@ add_action( 'before_woocommerce_init', __NAMESPACE__ . '\declare_woocommerce_com
 add_action( 'plugins_loaded', __NAMESPACE__ . '\boot' );
 
 /**
- * Creates the plugin's tables and its sign-in page.
+ * Creates the plugin's tables, its sign-in page and a webhook secret.
  */
 function activate(): void {
 	( new Schema() )->install();
 	( new Sign_In_Page() )->ensure_exists();
+
+	// add_option() leaves an existing secret alone. Not autoloaded: only the webhook reads it.
+	add_option( Webhook_Controller::SECRET_OPTION, wp_generate_password( 64, false ), '', false );
 }
 
 /**

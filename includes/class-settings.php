@@ -35,6 +35,7 @@ final class Settings {
 		add_action( 'woocommerce_settings_' . self::TAB, array( $this, 'render' ) );
 		add_action( 'woocommerce_update_options_' . self::TAB, array( $this, 'save' ) );
 		add_filter( 'woocommerce_admin_settings_sanitize_option_' . Rep_Codes::OPTION, array( $this, 'sanitize_rep_codes' ) );
+		add_filter( 'woocommerce_admin_settings_sanitize_option_' . Webhook_Controller::SECRET_OPTION, array( $this, 'sanitize_webhook_secret' ) );
 	}
 
 	/**
@@ -86,6 +87,31 @@ final class Settings {
 	}
 
 	/**
+	 * Keeps the old secret when the new one is too short to be worth anything.
+	 *
+	 * @param mixed $value Field content after WooCommerce's own sanitising.
+	 */
+	public function sanitize_webhook_secret( $value ): string {
+		$secret = trim( is_string( $value ) ? $value : '' );
+
+		if ( strlen( $secret ) >= Webhook_Controller::MIN_SECRET_LENGTH ) {
+			return $secret;
+		}
+
+		if ( class_exists( \WC_Admin_Settings::class ) ) {
+			\WC_Admin_Settings::add_error(
+				sprintf(
+					/* translators: %d: minimum number of characters. */
+					__( 'The webhook secret was not changed: it must be at least %d characters.', 'gated-access-attribution' ),
+					Webhook_Controller::MIN_SECRET_LENGTH
+				)
+			);
+		}
+
+		return (string) get_option( Webhook_Controller::SECRET_OPTION, '' );
+	}
+
+	/**
 	 * Field definitions in WooCommerce settings API format.
 	 *
 	 * @return array<int, array<string, mixed>>
@@ -116,6 +142,22 @@ final class Settings {
 				'type'    => 'textarea',
 				'css'     => 'min-height: 10em; max-width: 40em;',
 				'default' => '',
+			),
+			array(
+				'title'             => __( 'Webhook secret', 'gated-access-attribution' ),
+				'desc'              => sprintf(
+					/* translators: %s: webhook URL. */
+					__( 'Shared with the system that posts events to %s. It signs each request body with HMAC-SHA256 using this value. At least 32 characters. Changing it stops the old value working at once.', 'gated-access-attribution' ),
+					esc_url( rest_url( Webhook_Controller::ROUTE_NAMESPACE . Webhook_Controller::ROUTE ) )
+				),
+				'id'                => Webhook_Controller::SECRET_OPTION,
+				'type'              => 'text',
+				'autoload'          => false,
+				'css'               => 'max-width: 40em;',
+				'custom_attributes' => array(
+					'autocomplete' => 'off',
+					'spellcheck'   => 'false',
+				),
 			),
 			array(
 				'type' => 'sectionend',

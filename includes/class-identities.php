@@ -104,6 +104,27 @@ final class Identities {
 	}
 
 	/**
+	 * Moves the identity to another rep, whatever it had before.
+	 *
+	 * Only for explicit reassignment (admin screen, webhook). Orders already
+	 * placed keep the rep they were attributed to.
+	 *
+	 * @param int    $identity_id Identity ID.
+	 * @param string $rep_code    A configured rep code.
+	 */
+	public function assign_rep( int $identity_id, string $rep_code ): void {
+		global $wpdb;
+
+		$wpdb->update(
+			$this->table(),
+			array( 'rep_code' => $rep_code ),
+			array( 'id' => $identity_id ),
+			array( '%s' ),
+			array( '%d' )
+		);
+	}
+
+	/**
 	 * Prefixed table name.
 	 */
 	private function table(): string {

@@ -80,6 +80,13 @@ final class Plugin {
 	private Catalog_Visibility $catalog_visibility;
 
 	/**
+	 * Signed, idempotent inbound webhook.
+	 *
+	 * @var Webhook_Controller
+	 */
+	private Webhook_Controller $webhook;
+
+	/**
 	 * Builds the services.
 	 */
 	public function __construct() {
@@ -100,6 +107,7 @@ final class Plugin {
 		$this->settings           = new Settings( $rep_codes );
 		$this->catalog_gate       = new Catalog_Gate( $access, $page );
 		$this->catalog_visibility = new Catalog_Visibility( $access );
+		$this->webhook            = new Webhook_Controller( $identities, $rep_codes, new Processed_Events(), $this->audit_log );
 	}
 
 	/**
@@ -119,6 +127,7 @@ final class Plugin {
 		$this->settings->register_hooks();
 		$this->catalog_gate->register_hooks();
 		$this->catalog_visibility->register_hooks();
+		$this->webhook->register_hooks();
 	}
 
 	/**

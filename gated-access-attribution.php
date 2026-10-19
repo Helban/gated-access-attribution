@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:          Gated Access & Referral Attribution for WooCommerce
- * Plugin URI:           https://github.com/Helban/woo-gated-access
- * Description:          Shows the catalog only to buyers who verify their email with a one-time code, and records on every order which sales rep referred the buyer.
+ * Plugin URI:           https://github.com/Helban/gated-access-attribution
+ * Description:          Shows the catalog only to buyers who verify their email with a one-time code, and records on their orders which sales rep referred them.
  * Version:              0.1.0
  * Requires at least:    7.1
  * Requires PHP:         8.1

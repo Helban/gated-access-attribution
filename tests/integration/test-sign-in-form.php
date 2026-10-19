@@ -5,6 +5,7 @@
  * @package GatedAccess
  */
 
+use GatedAccess\Catalog_Access;
 use GatedAccess\Cookies;
 use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
@@ -73,6 +74,24 @@ class Test_Sign_In_Form extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'name="code"', $html );
 		$this->assertStringContainsString( 'We sent a 6-digit code to buyer@example.com', $html );
 		$this->assertCount( 1, tests_retrieve_phpmailer_instance()->mock_sent );
+	}
+
+	public function test_buttons_carry_the_classes_themes_style(): void {
+		$email_step = $this->new_form()->render();
+		$code_step  = $this->submit( $this->new_form(), 'request_code', array( 'email' => 'buyer@example.com' ) )->render();
+
+		$this->assertStringContainsString( 'class="button wp-element-button">Email me a sign-in code', $email_step );
+		$this->assertStringContainsString( 'class="button wp-element-button">Sign in', $code_step );
+		$this->assertStringContainsString( 'class="gaa-link-button">Send a new code', $code_step );
+		$this->assertStringContainsString( 'class="gaa-link-button" href', $code_step );
+	}
+
+	public function test_code_sent_notice_is_a_success_and_a_failure_is_an_error(): void {
+		$sent   = $this->submit( $this->new_form(), 'request_code', array( 'email' => 'buyer@example.com' ) )->render();
+		$failed = $this->submit( $this->new_form(), 'request_code', array( 'email' => 'not-an-address' ) )->render();
+
+		$this->assertStringContainsString( 'class="woocommerce-message" role="status"', $sent );
+		$this->assertStringContainsString( 'class="woocommerce-error" role="alert"', $failed );
 	}
 
 	public function test_page_is_identical_for_known_and_unknown_addresses(): void {
@@ -219,6 +238,58 @@ class Test_Sign_In_Form extends WP_UnitTestCase {
 
 		$this->assertSame( ( new Sign_In_Page() )->url(), $redirect->location );
 		$this->assertNull( $this->session->current_identity() );
+	}
+
+	public function test_signing_out_puts_the_gate_back_up(): void {
+		$access = new Catalog_Access( $this->session );
+		$this->sign_in_as( 'buyer@example.com' );
+		$this->assertTrue( $access->is_granted() );
+
+		$this->submit_expecting_redirect( 'sign_out', array() );
+
+		$this->assertFalse( $access->is_granted() );
+	}
+
+	public function test_sign_out_without_a_valid_nonce_keeps_the_session(): void {
+		$this->sign_in_as( 'buyer@example.com' );
+
+		foreach ( array( array(), array( 'gaa_nonce' => 'forged' ) ) as $nonce_field ) {
+			$_POST = array_merge( array( 'gaa_action' => 'sign_out' ), $nonce_field );
+			$this->new_form()->handle_submission();
+
+			$this->assertSame( 'buyer@example.com', $this->session->current_identity()?->email );
+		}
+	}
+
+	public function test_signed_in_page_shows_the_address_and_a_sign_out_button(): void {
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+		$this->sign_in_as( 'buyer@example.com' );
+
+		$html = $this->new_form()->render();
+
+		$this->assertStringContainsString( 'Signed in as <strong>buyer@example.com</strong>', $html );
+		$this->assertStringContainsString( 'value="sign_out"', $html );
+		$this->assertStringContainsString( 'Continue to the shop', $html );
+	}
+
+	public function test_session_shortcode_links_to_sign_in_for_a_visitor(): void {
+		$html = do_shortcode( '[gaa_session]' );
+
+		$this->assertStringContainsString( 'href="' . esc_url( ( new Sign_In_Page() )->url() ) . '"', $html );
+		$this->assertStringContainsString( '>Sign in</a>', $html );
+		$this->assertStringNotContainsString( 'sign_out', $html );
+	}
+
+	public function test_session_shortcode_shows_the_escaped_address_and_a_sign_out_form(): void {
+		$this->sign_in_as( "o'brien+a&b@example.com" );
+
+		$html = do_shortcode( '[gaa_session]' );
+
+		$this->assertStringContainsString( 'value="sign_out"', $html );
+		$this->assertStringContainsString( 'name="gaa_nonce"', $html );
+		$this->assertStringContainsString( 'Sign out</button>', $html );
+		$this->assertStringContainsString( 'o&#039;brien+a&amp;b@example.com', $html );
+		$this->assertStringNotContainsString( 'a&b@', $html );
 	}
 
 	/**

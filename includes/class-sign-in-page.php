@@ -18,6 +18,11 @@ final class Sign_In_Page {
 	public const SHORTCODE = 'gaa_sign_in';
 
 	/**
+	 * Shortcode for a header or menu: a sign-in link, or the buyer's address and a sign-out button.
+	 */
+	public const SESSION_SHORTCODE = 'gaa_session';
+
+	/**
 	 * Post meta key on pages the plugin created, so uninstall never deletes a page an admin made.
 	 */
 	public const CREATED_META = '_gaa_created_by_plugin';

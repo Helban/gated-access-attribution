@@ -65,4 +65,44 @@ class Test_Rep_Codes extends WP_UnitTestCase {
 		$this->assertSame( "anna: Anna Kowalska\nben", $stored );
 		$this->assertStringContainsString( 'not valid!', $messages );
 	}
+
+	public function test_partly_rejected_save_also_confirms_what_was_kept(): void {
+		include_once WC_ABSPATH . 'includes/admin/class-wc-admin-settings.php';
+		$settings = new Settings( $this->rep_codes );
+
+		$settings->sanitize_rep_codes( "anna: Anna Kowalska\nnot valid!\nben" );
+
+		$this->assertStringContainsString( '2 valid lines were saved: anna, ben.', $this->render_settings( $settings ) );
+		$this->assertStringContainsString( 'notice-success', $this->render_settings( $settings ) );
+	}
+
+	public function test_save_with_only_rejected_lines_shows_no_success_notice(): void {
+		include_once WC_ABSPATH . 'includes/admin/class-wc-admin-settings.php';
+		$settings = new Settings( $this->rep_codes );
+
+		$settings->sanitize_rep_codes( 'not valid!' );
+
+		$this->assertStringNotContainsString( 'notice-success', $this->render_settings( $settings ) );
+	}
+
+	public function test_settings_tab_has_no_second_title_and_a_full_width_secret(): void {
+		include_once WC_ABSPATH . 'includes/admin/class-wc-admin-settings.php';
+
+		$html = $this->render_settings( new Settings( $this->rep_codes ) );
+
+		$this->assertStringNotContainsString( '<h2>Gated access</h2>', $html );
+		$this->assertMatchesRegularExpression( '/<input[^>]+class="large-text code"[^>]+gaa_webhook_secret|<input[^>]+gaa_webhook_secret[^>]+class="large-text code"/', $html );
+	}
+
+	/**
+	 * Output of the settings tab body.
+	 *
+	 * @param Settings $settings Tab under test.
+	 */
+	private function render_settings( Settings $settings ): string {
+		ob_start();
+		$settings->render();
+
+		return (string) ob_get_clean();
+	}
 }

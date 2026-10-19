@@ -59,6 +59,13 @@ final class Plugin {
 	private Order_Attribution $order_attribution;
 
 	/**
+	 * Verified email as the default billing email.
+	 *
+	 * @var Checkout_Prefill
+	 */
+	private Checkout_Prefill $checkout_prefill;
+
+	/**
 	 * WooCommerce settings tab.
 	 *
 	 * @var Settings
@@ -111,6 +118,7 @@ final class Plugin {
 		$this->sign_in_form       = new Sign_In_Form( $this->otp, $identities, $session, $page );
 		$this->referral           = new Referral( $rep_codes, $identities, $this->audit_log, $cookies );
 		$this->order_attribution  = new Order_Attribution( $session, $rep_codes, $this->audit_log );
+		$this->checkout_prefill   = new Checkout_Prefill( $session );
 		$this->settings           = new Settings( $rep_codes );
 		$this->catalog_gate       = new Catalog_Gate( $access, $page );
 		$this->catalog_visibility = new Catalog_Visibility( $access );
@@ -132,6 +140,7 @@ final class Plugin {
 		$this->sign_in_form->register_hooks();
 		$this->referral->register_hooks();
 		$this->order_attribution->register_hooks();
+		$this->checkout_prefill->register_hooks();
 		$this->settings->register_hooks();
 		$this->catalog_gate->register_hooks();
 		$this->catalog_visibility->register_hooks();

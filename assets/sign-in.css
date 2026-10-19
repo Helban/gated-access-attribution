@@ -1,0 +1,40 @@
+/* Primary buttons take the theme's own button style (wp-element-button, button). Only the secondary actions need this. */
+.gaa-sign-in .button,
+.gaa-sign-in .wp-element-button {
+	min-height: 44px;
+}
+
+.gaa-sign-in__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 1.5rem;
+}
+
+.gaa-link-button {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.gaa-link-button:hover {
+	text-decoration-thickness: 2px;
+}
+
+.gaa-session {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0 0.5rem;
+}
+
+.gaa-session form {
+	margin: 0;
+}

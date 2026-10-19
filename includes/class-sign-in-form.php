@@ -70,6 +70,7 @@ final class Sign_In_Form {
 	 */
 	public function register_hooks(): void {
 		add_shortcode( Sign_In_Page::SHORTCODE, array( $this, 'render' ) );
+		add_shortcode( Sign_In_Page::SESSION_SHORTCODE, array( $this, 'render_session' ) );
 		// Before the catalog gate, which runs at the default priority.
 		add_action( 'template_redirect', array( $this, 'handle_submission' ), 5 );
 		add_action( 'template_redirect', array( $this, 'prevent_caching' ), 5 );
@@ -115,8 +116,7 @@ final class Sign_In_Form {
 	 * Renders the step the visitor is on.
 	 */
 	public function render(): string {
-		// Covers the shortcode placed on a page other than the configured one. Headers are out by now; the constant still works.
-		Page_Cache::forbid();
+		$this->prepare_personal_output();
 
 		ob_start();
 
@@ -136,6 +136,46 @@ final class Sign_In_Form {
 		echo '</div>';
 
 		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Renders the [gaa_session] shortcode: a sign-in link, or the address and a sign-out button.
+	 */
+	public function render_session(): string {
+		$this->prepare_personal_output();
+
+		$identity = $this->session->current_identity();
+
+		if ( null === $identity ) {
+			return sprintf(
+				'<div class="gaa-session"><a href="%s">%s</a></div>',
+				esc_url( $this->page->url() ),
+				esc_html__( 'Sign in', 'gated-access-attribution' )
+			);
+		}
+
+		ob_start();
+		?>
+		<div class="gaa-session">
+			<span class="gaa-session__email"><?php echo esc_html( $identity->email ); ?></span>
+			<span aria-hidden="true">&middot;</span>
+			<form method="post" class="gaa-session__sign-out">
+				<?php $this->render_hidden_fields( 'sign_out' ); ?>
+				<button type="submit" class="gaa-link-button"><?php esc_html_e( 'Sign out', 'gated-access-attribution' ); ?></button>
+			</form>
+		</div>
+		<?php
+		return (string) ob_get_clean();
+	}
+
+	/**
+	 * Marks the response uncacheable and loads the stylesheet for output that names the signed-in buyer.
+	 */
+	private function prepare_personal_output(): void {
+		// Covers a shortcode placed on a page other than the configured one. Headers are out by now; the constant still works.
+		Page_Cache::forbid();
+
+		wp_enqueue_style( 'gaa-sign-in', plugins_url( 'assets/sign-in.css', PLUGIN_FILE ), array(), VERSION );
 	}
 
 	/**
@@ -312,7 +352,7 @@ final class Sign_In_Form {
 		}
 
 		if ( '' !== $this->notice ) {
-			printf( '<div class="woocommerce-info" role="status">%s</div>', esc_html( $this->notice ) );
+			printf( '<div class="woocommerce-message" role="status">%s</div>', esc_html( $this->notice ) );
 		}
 	}
 
@@ -327,7 +367,7 @@ final class Sign_In_Form {
 				<input type="email" class="input-text" name="email" id="gaa-email" autocomplete="email" required value="<?php echo esc_attr( $this->email ); ?>">
 			</p>
 			<?php $this->render_hidden_fields( 'request_code' ); ?>
-			<p><button type="submit" class="button"><?php esc_html_e( 'Email me a sign-in code', 'gated-access-attribution' ); ?></button></p>
+			<p><button type="submit" class="button wp-element-button"><?php esc_html_e( 'Email me a sign-in code', 'gated-access-attribution' ); ?></button></p>
 		</form>
 		<?php
 	}
@@ -344,15 +384,13 @@ final class Sign_In_Form {
 			</p>
 			<input type="hidden" name="email" value="<?php echo esc_attr( $this->email ); ?>">
 			<?php $this->render_hidden_fields( 'verify_code' ); ?>
-			<p><button type="submit" class="button"><?php esc_html_e( 'Sign in', 'gated-access-attribution' ); ?></button></p>
+			<p><button type="submit" class="button wp-element-button"><?php esc_html_e( 'Sign in', 'gated-access-attribution' ); ?></button></p>
 		</form>
-		<form method="post" class="gaa-sign-in__resend">
+		<form method="post" class="gaa-sign-in__resend gaa-sign-in__actions">
 			<input type="hidden" name="email" value="<?php echo esc_attr( $this->email ); ?>">
 			<?php $this->render_hidden_fields( 'request_code' ); ?>
-			<p>
-				<button type="submit" class="button"><?php esc_html_e( 'Send a new code', 'gated-access-attribution' ); ?></button>
-				<a href="<?php echo esc_url( $this->page->url( $this->requested_redirect() ) ); ?>"><?php esc_html_e( 'Use a different email address', 'gated-access-attribution' ); ?></a>
-			</p>
+			<button type="submit" class="gaa-link-button"><?php esc_html_e( 'Send a new code', 'gated-access-attribution' ); ?></button>
+			<a class="gaa-link-button" href="<?php echo esc_url( $this->page->url( $this->requested_redirect() ) ); ?>"><?php esc_html_e( 'Use a different email address', 'gated-access-attribution' ); ?></a>
 		</form>
 		<?php
 	}
@@ -368,15 +406,15 @@ final class Sign_In_Form {
 			<?php
 			printf(
 				/* translators: %s: email address. */
-				esc_html__( 'You are signed in as %s.', 'gated-access-attribution' ),
+				esc_html__( 'Signed in as %s', 'gated-access-attribution' ),
 				'<strong>' . esc_html( $identity->email ) . '</strong>'
 			);
 			?>
 		</p>
-		<p><a class="button" href="<?php echo esc_url( $this->redirect_target() ); ?>"><?php esc_html_e( 'Continue to the shop', 'gated-access-attribution' ); ?></a></p>
+		<p><a class="button wp-element-button" href="<?php echo esc_url( $this->redirect_target() ); ?>"><?php esc_html_e( 'Continue to the shop', 'gated-access-attribution' ); ?></a></p>
 		<form method="post" class="gaa-sign-in__sign-out">
 			<?php $this->render_hidden_fields( 'sign_out' ); ?>
-			<p><button type="submit" class="button"><?php esc_html_e( 'Sign out', 'gated-access-attribution' ); ?></button></p>
+			<p><button type="submit" class="gaa-link-button"><?php esc_html_e( 'Sign out', 'gated-access-attribution' ); ?></button></p>
 		</form>
 		<?php
 	}

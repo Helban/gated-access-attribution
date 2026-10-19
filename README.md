@@ -27,10 +27,10 @@ Then add sales reps under WooCommerce > Settings > Gated access, and hand each r
 
 ## Configuration
 
-WooCommerce > Settings > Gated access has three fields.
+WooCommerce > Settings > Gated access has three fields. The webhook secret box is full width so the whole value is visible for copying.
 
 - Sign-in page: the page holding the `[gaa_sign_in]` shortcode. Activation creates one at `/sign-in/`.
-- Sales reps: one rep per line, the code, a colon, then the name, for example `anna: Anna Kowalska`. Codes may use `a-z`, `0-9`, hyphen and underscore, up to 32 characters; they are lower-cased on save, and lines that do not fit are reported and dropped. A rep's referral link is any page of the store with `?ref=<code>` added, for example `https://shop.example/?ref=anna`.
+- Sales reps: one rep per line, the code, a colon, then the name, for example `anna: Anna Kowalska`. Codes may use `a-z`, `0-9`, hyphen and underscore, up to 32 characters; they are lower-cased on save, and lines that do not fit are reported and dropped, while the valid ones are saved and listed in a second notice. A rep's referral link is any page of the store with `?ref=<code>` added, for example `https://shop.example/?ref=anna`.
 - Webhook secret: the shared secret for the webhook below. Activation generates a random 64-character value. Anything shorter than 32 characters is refused on save, and the old value is kept. The option is not autoloaded.
 
 ## Signing in
@@ -40,7 +40,15 @@ Activation creates a page at `/sign-in/` containing the `[gaa_sign_in]` shortcod
 1. The visitor enters an email address. The plugin emails a six-digit code.
 2. The visitor enters the code. On success the plugin creates the identity (first time) or refreshes `verified_at`, fires `gaa_identity_verified`, sets the session cookie and redirects to the page the visitor came from (or the shop page).
 
+A signed-in buyer who opens the sign-in page sees "Signed in as <address>", a link back to the shop and a "Sign out" button. Signing out is a POST with the form nonce; it deletes the `gaa_session` cookie the way the session set it and returns to the sign-in page, where the catalog gate applies again.
+
+To show the state elsewhere, put `[gaa_session]` in a header, widget or menu. A visitor sees a "Sign in" link to the sign-in page. A signed-in buyer sees their address and a "Sign out" button. The output is personal, so it marks the response uncacheable like the sign-in form does.
+
 Anyone who can read mail at an address can sign in. Restricting who counts as an approved buyer is an open question in `NOTES.md`.
+
+## Checkout email
+
+While a verified session exists and the WooCommerce customer's billing email is empty, both checkouts offer the verified address as the billing email, so the buyer is not shown as a guest with an empty field. The plugin filters `woocommerce_customer_get_billing_email` for the customer the visitor is checking out as. The block checkout gets it in the Store API cart response and the shortcode checkout through `WC_Checkout::get_value()`. Nothing is written into the customer session, and an address the buyer typed is never replaced.
 
 ## Catalog gating
 

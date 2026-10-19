@@ -20,6 +20,13 @@ final class Settings {
 	public const TAB = 'gated_access';
 
 	/**
+	 * Confirmation of what a partly rejected save did keep, already translated.
+	 *
+	 * @var string
+	 */
+	private string $saved_notice = '';
+
+	/**
 	 * Sets up the tab.
 	 *
 	 * @param Rep_Codes $rep_codes Configured reps.
@@ -55,6 +62,17 @@ final class Settings {
 	 * Prints the fields.
 	 */
 	public function render(): void {
+		// WooCommerce prints its "saved" message only when nothing went wrong, so a partial save needs its own.
+		if ( '' !== $this->saved_notice ) {
+			wp_admin_notice(
+				esc_html( $this->saved_notice ),
+				array(
+					'type'               => 'success',
+					'additional_classes' => array( 'inline' ),
+				)
+			);
+		}
+
 		woocommerce_admin_fields( $this->fields() );
 	}
 
@@ -72,6 +90,15 @@ final class Settings {
 	 */
 	public function sanitize_rep_codes( $value ): string {
 		$parsed = $this->rep_codes->parse( is_string( $value ) ? $value : '' );
+
+		if ( array() !== $parsed['rejected'] && array() !== $parsed['reps'] ) {
+			$this->saved_notice = sprintf(
+				/* translators: 1: number of reps, 2: comma-separated rep codes. */
+				_n( '%1$d valid line was saved: %2$s.', '%1$d valid lines were saved: %2$s.', count( $parsed['reps'] ), 'gated-access-attribution' ),
+				count( $parsed['reps'] ),
+				implode( ', ', array_keys( $parsed['reps'] ) )
+			);
+		}
 
 		if ( array() !== $parsed['rejected'] && class_exists( \WC_Admin_Settings::class ) ) {
 			\WC_Admin_Settings::add_error(
@@ -118,10 +145,10 @@ final class Settings {
 	 */
 	private function fields(): array {
 		return array(
+			// No title: WooCommerce already shows the tab name as the page heading.
 			array(
-				'title' => __( 'Gated access', 'gated-access-attribution' ),
-				'type'  => 'title',
-				'id'    => 'gaa_settings',
+				'type' => 'title',
+				'id'   => 'gaa_settings',
 			),
 			array(
 				'title'    => __( 'Sign-in page', 'gated-access-attribution' ),
@@ -153,7 +180,9 @@ final class Settings {
 				'id'                => Webhook_Controller::SECRET_OPTION,
 				'type'              => 'text',
 				'autoload'          => false,
-				'css'               => 'max-width: 40em;',
+				'class'             => 'large-text code',
+				// WooCommerce's own stylesheet fixes text inputs at 400px, too narrow for the 64-character secret.
+				'css'               => 'width: 100%; max-width: 48em;',
 				'custom_attributes' => array(
 					'autocomplete' => 'off',
 					'spellcheck'   => 'false',

@@ -27,3 +27,9 @@ add_filter(
 	'wp_mail_from',
 	static fn (): string => 'store@example.test'
 );
+
+// Without this the sender shows up as "WordPress" in the mailbox.
+add_filter(
+	'wp_mail_from_name',
+	static fn (): string => wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES )
+);

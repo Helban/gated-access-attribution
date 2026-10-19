@@ -34,7 +34,7 @@ class Test_Schema extends WP_UnitTestCase {
 	public function test_identities_table_has_the_documented_columns(): void {
 		global $wpdb;
 
-		$columns = $wpdb->get_col( "DESCRIBE {$wpdb->prefix}gaa_identities" );
+		$columns = $wpdb->get_col( $wpdb->prepare( 'DESCRIBE %i', Schema::table( Schema::IDENTITIES ) ) );
 
 		$this->assertSame( array( 'id', 'email', 'verified_at', 'rep_code', 'created_at' ), $columns );
 	}
@@ -46,10 +46,10 @@ class Test_Schema extends WP_UnitTestCase {
 			'email'      => 'buyer@example.com',
 			'created_at' => gmdate( 'Y-m-d H:i:s' ),
 		);
-		$wpdb->insert( $wpdb->prefix . Schema::IDENTITIES, $row );
+		$wpdb->insert( Schema::table( Schema::IDENTITIES ), $row );
 
 		$suppressed = $wpdb->suppress_errors( true );
-		$second     = $wpdb->insert( $wpdb->prefix . Schema::IDENTITIES, $row );
+		$second     = $wpdb->insert( Schema::table( Schema::IDENTITIES ), $row );
 		$wpdb->suppress_errors( $suppressed );
 
 		$this->assertFalse( $second );
@@ -60,7 +60,7 @@ class Test_Schema extends WP_UnitTestCase {
 
 		foreach ( array( 'evt_AbC', 'evt_abc' ) as $event_id ) {
 			$inserted = $wpdb->insert(
-				$wpdb->prefix . Schema::PROCESSED_EVENTS,
+				Schema::table( Schema::PROCESSED_EVENTS ),
 				array(
 					'event_id'     => $event_id,
 					'event_type'   => 'test',

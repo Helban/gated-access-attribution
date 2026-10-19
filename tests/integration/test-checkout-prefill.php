@@ -28,7 +28,7 @@ class Test_Checkout_Prefill extends WP_UnitTestCase {
 		unset( $_COOKIE[ Session::COOKIE ] );
 		WC()->customer->set_billing_email( '' );
 		WC()->cart->empty_cart();
-		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Forces fresh route objects, as WordPress's REST test cases do.
+		$this->reset_rest_server();
 
 		parent::tear_down();
 	}

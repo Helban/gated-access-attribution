@@ -9,6 +9,7 @@ use GatedAccess\Cookies;
 use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
+use GatedAccess\Schema;
 use GatedAccess\Session;
 
 /**
@@ -81,7 +82,7 @@ class Test_Session extends WP_UnitTestCase {
 
 		$identity = $this->identities->record_verification( Email_Address::parse( 'buyer@example.com' ) );
 		$this->session->start( $identity );
-		$wpdb->delete( $wpdb->prefix . 'gaa_identities', array( 'id' => $identity->id ) );
+		$wpdb->delete( Schema::table( Schema::IDENTITIES ), array( 'id' => $identity->id ) );
 
 		$this->assertNull( $this->session->current_identity() );
 	}

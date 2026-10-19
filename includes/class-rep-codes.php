@@ -17,12 +17,13 @@ defined( 'ABSPATH' ) || exit;
  */
 final class Rep_Codes {
 
-	public const OPTION = 'gaa_rep_codes';
+	public const OPTION     = 'gaa_rep_codes';
+	public const MAX_LENGTH = 32;
 
 	/**
-	 * Lower-case letters, digits, hyphen and underscore, up to 32 characters.
+	 * Lower-case letters, digits, hyphen and underscore, up to MAX_LENGTH characters.
 	 */
-	private const PATTERN = '/^[a-z0-9][a-z0-9_-]{0,31}$/';
+	private const PATTERN = '/^[a-z0-9][a-z0-9_-]{0,' . ( self::MAX_LENGTH - 1 ) . '}$/';
 
 	/**
 	 * Every configured rep, keyed by code.

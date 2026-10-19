@@ -19,6 +19,7 @@ defined( 'ABSPATH' ) || exit;
  */
 final class Otp_Service {
 
+	public const CODE_LENGTH        = 6;
 	public const CODE_TTL           = 10 * MINUTE_IN_SECONDS;
 	public const MAX_ATTEMPTS       = 5;
 	public const EMAIL_LIMIT        = 3;
@@ -52,14 +53,14 @@ final class Otp_Service {
 	 * @throws Sign_In_Error When a rate limit is hit or the code cannot be stored or sent.
 	 */
 	public function request_code( Email_Address $email, string $ip ): void {
-		$email_hash = $this->hmac->digest( 'otp-email', $email->value );
+		$email_hash = $this->hmac->digest( 'otp-email', $email->address );
 		$ip_hash    = $this->hmac->digest( 'otp-ip', $ip );
 
 		if ( $this->is_rate_limited( $email_hash, $ip_hash ) ) {
 			throw Sign_In_Error::rate_limited();
 		}
 
-		$code = sprintf( '%06d', random_int( 0, 999999 ) );
+		$code = str_pad( (string) random_int( 0, 10 ** self::CODE_LENGTH - 1 ), self::CODE_LENGTH, '0', STR_PAD_LEFT );
 
 		$this->retire_active_codes( $email_hash );
 		$this->store_code( $email_hash, $ip_hash, $code );
@@ -79,10 +80,10 @@ final class Otp_Service {
 	public function verify_code( Email_Address $email, string $code ): void {
 		global $wpdb;
 
-		$email_hash = $this->hmac->digest( 'otp-email', $email->value );
+		$email_hash = $this->hmac->digest( 'otp-email', $email->address );
 		$code       = (string) preg_replace( '/\s+/', '', $code );
 
-		if ( ! preg_match( '/^\d{6}$/', $code ) ) {
+		if ( ! preg_match( '/^\d{' . self::CODE_LENGTH . '}$/', $code ) ) {
 			throw Sign_In_Error::invalid_code();
 		}
 
@@ -175,11 +176,12 @@ final class Otp_Service {
 			)
 		);
 
-		if ( (int) $email_requests->last_window >= self::EMAIL_LIMIT || (int) $email_requests->last_day >= self::EMAIL_DAILY_LIMIT ) {
+		// A COUNT query always returns a row, so null means the query failed. Fail closed.
+		if ( null === $email_requests || (int) $email_requests->last_window >= self::EMAIL_LIMIT || (int) $email_requests->last_day >= self::EMAIL_DAILY_LIMIT ) {
 			return true;
 		}
 
-		$ip_requests = (int) $wpdb->get_var(
+		$ip_requests = $wpdb->get_var(
 			$wpdb->prepare(
 				'SELECT COUNT(*) FROM %i WHERE ip_hash = %s AND created_at >= %s',
 				$this->table(),
@@ -188,7 +190,7 @@ final class Otp_Service {
 			)
 		);
 
-		return $ip_requests >= self::IP_LIMIT;
+		return null === $ip_requests || (int) $ip_requests >= self::IP_LIMIT;
 	}
 
 	/**
@@ -263,7 +265,7 @@ final class Otp_Service {
 			self::CODE_TTL / MINUTE_IN_SECONDS
 		);
 
-		if ( ! wp_mail( $email->value, $subject, $message ) ) {
+		if ( ! wp_mail( $email->address, $subject, $message ) ) {
 			// No address in the message: PHPMailer errors can include the recipient.
 			wc_get_logger()->error(
 				'wp_mail() failed while sending a sign-in code. Check the site mail setup and its From address.',
@@ -279,7 +281,7 @@ final class Otp_Service {
 	private function table(): string {
 		global $wpdb;
 
-		return $wpdb->prefix . Schema::OTP_REQUESTS;
+		return Schema::table( Schema::OTP_REQUESTS );
 	}
 
 	/**

@@ -86,10 +86,10 @@ final class Settings {
 	/**
 	 * Keeps valid rep lines in canonical form and reports the rest.
 	 *
-	 * @param mixed $value Textarea content after WooCommerce's own sanitising.
+	 * @param mixed $submitted_rep_lines Textarea content after WooCommerce's own sanitising.
 	 */
-	public function sanitize_rep_codes( $value ): string {
-		$parsed = $this->rep_codes->parse( is_string( $value ) ? $value : '' );
+	public function sanitize_rep_codes( $submitted_rep_lines ): string {
+		$parsed = $this->rep_codes->parse( is_string( $submitted_rep_lines ) ? $submitted_rep_lines : '' );
 
 		if ( array() !== $parsed['rejected'] && array() !== $parsed['reps'] ) {
 			$this->saved_notice = sprintf(
@@ -103,9 +103,10 @@ final class Settings {
 		if ( array() !== $parsed['rejected'] && class_exists( \WC_Admin_Settings::class ) ) {
 			\WC_Admin_Settings::add_error(
 				sprintf(
-					/* translators: %s: comma-separated list of rejected lines. */
-					__( 'These rep lines were not saved: %s. A code may use a-z, 0-9, hyphen and underscore, up to 32 characters.', 'gated-access-attribution' ),
-					implode( ', ', $parsed['rejected'] )
+					/* translators: 1: comma-separated list of rejected lines, 2: longest allowed code. */
+					__( 'These rep lines were not saved: %1$s. A code may use a-z, 0-9, hyphen and underscore, up to %2$d characters.', 'gated-access-attribution' ),
+					implode( ', ', $parsed['rejected'] ),
+					Rep_Codes::MAX_LENGTH
 				)
 			);
 		}
@@ -116,10 +117,10 @@ final class Settings {
 	/**
 	 * Keeps the old secret when the new one is too short to be worth anything.
 	 *
-	 * @param mixed $value Field content after WooCommerce's own sanitising.
+	 * @param mixed $submitted_secret Field content after WooCommerce's own sanitising.
 	 */
-	public function sanitize_webhook_secret( $value ): string {
-		$secret = trim( is_string( $value ) ? $value : '' );
+	public function sanitize_webhook_secret( $submitted_secret ): string {
+		$secret = trim( is_string( $submitted_secret ) ? $submitted_secret : '' );
 
 		if ( strlen( $secret ) >= Webhook_Controller::MIN_SECRET_LENGTH ) {
 			return $secret;
@@ -173,9 +174,10 @@ final class Settings {
 			array(
 				'title'             => __( 'Webhook secret', 'gated-access-attribution' ),
 				'desc'              => sprintf(
-					/* translators: %s: webhook URL. */
-					__( 'Shared with the system that posts events to %s. It signs each request body with HMAC-SHA256 using this value. At least 32 characters. Changing it stops the old value working at once.', 'gated-access-attribution' ),
-					esc_url( rest_url( Webhook_Controller::ROUTE_NAMESPACE . Webhook_Controller::ROUTE ) )
+					/* translators: 1: webhook URL, 2: minimum number of characters. */
+					__( 'Shared with the system that posts events to %1$s. It signs each request body with HMAC-SHA256 using this value. At least %2$d characters. Changing it stops the old value working at once.', 'gated-access-attribution' ),
+					esc_url( rest_url( Webhook_Controller::ROUTE_NAMESPACE . Webhook_Controller::ROUTE ) ),
+					Webhook_Controller::MIN_SECRET_LENGTH
 				),
 				'id'                => Webhook_Controller::SECRET_OPTION,
 				'type'              => 'text',

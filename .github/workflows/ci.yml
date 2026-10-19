@@ -19,6 +19,7 @@ jobs:
           tools: composer:v2
           coverage: none
       - run: composer install --no-interaction --no-progress
+      - run: composer audit
       - run: composer lint
 
   test:
@@ -42,6 +43,11 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      # @wordpress/env 11.17.0 (the latest) pulls in simple-git and others with open
+      # advisories. It is dev tooling that never reaches a site, so this reports
+      # without failing the job. Drop continue-on-error once wp-env ships a fix.
+      - run: npm audit --audit-level=high
+        continue-on-error: true
       - run: composer install --no-interaction --no-progress
       - run: npx wp-env start
       - run: composer test

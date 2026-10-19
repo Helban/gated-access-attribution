@@ -1,0 +1,14 @@
+# Left out of `git archive`, so the zip holds only what runs on a site.
+/.github export-ignore
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.wp-env.json export-ignore
+/NOTES.md export-ignore
+/composer.json export-ignore
+/composer.lock export-ignore
+/dev export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
+/phpcs.xml.dist export-ignore
+/phpunit.xml.dist export-ignore
+/tests export-ignore

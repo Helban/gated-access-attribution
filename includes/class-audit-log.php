@@ -17,18 +17,32 @@ defined( 'ABSPATH' ) || exit;
 final class Audit_Log {
 
 	/**
+	 * Width of the actor column. WordPress turns off MySQL's strict mode, so
+	 * a longer actor would be cut short without an error.
+	 */
+	public const ACTOR_MAX_LENGTH = 100;
+
+	public const ORDER_ATTRIBUTED = 'order.attributed';
+
+	/**
 	 * Records one event.
 	 *
 	 * @param int|null             $identity_id Identity the event concerns, if any.
 	 * @param string               $event       Dotted event name, such as "rep.assigned".
 	 * @param string               $actor       Who caused it: "system", "checkout", "user:12", "webhook:evt_1".
 	 * @param array<string, mixed> $context     Event details, stored as JSON.
+	 * @throws \InvalidArgumentException When the actor does not fit its column.
+	 * @throws Storage_Error             When the row cannot be written.
 	 */
 	public function record( ?int $identity_id, string $event, string $actor, array $context = array() ): void {
 		global $wpdb;
 
-		$wpdb->insert(
-			$wpdb->prefix . Schema::AUDIT_LOG,
+		if ( strlen( $actor ) > self::ACTOR_MAX_LENGTH ) {
+			throw new \InvalidArgumentException( 'The audit actor is longer than its column.' );
+		}
+
+		$inserted = $wpdb->insert(
+			Schema::table( Schema::AUDIT_LOG ),
 			array(
 				'identity_id' => $identity_id,
 				'event'       => $event,
@@ -38,6 +52,10 @@ final class Audit_Log {
 			),
 			array( '%d', '%s', '%s', '%s', '%s' )
 		);
+
+		if ( false === $inserted ) {
+			throw new Storage_Error( 'Could not write the audit entry.' );
+		}
 	}
 
 	/**
@@ -53,7 +71,7 @@ final class Audit_Log {
 		$rows = $wpdb->get_results(
 			$wpdb->prepare(
 				'SELECT event, actor, context, created_at FROM %i WHERE identity_id = %d ORDER BY id DESC LIMIT %d',
-				$wpdb->prefix . Schema::AUDIT_LOG,
+				Schema::table( Schema::AUDIT_LOG ),
 				$identity_id,
 				$limit
 			)
@@ -78,9 +96,10 @@ final class Audit_Log {
 
 		$contexts = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT context FROM %i WHERE identity_id = %d AND event = 'order.attributed' ORDER BY id DESC LIMIT %d",
-				$wpdb->prefix . Schema::AUDIT_LOG,
+				'SELECT context FROM %i WHERE identity_id = %d AND event = %s ORDER BY id DESC LIMIT %d',
+				Schema::table( Schema::AUDIT_LOG ),
 				$identity_id,
+				self::ORDER_ATTRIBUTED,
 				$limit
 			)
 		);

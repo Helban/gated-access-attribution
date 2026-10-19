@@ -11,6 +11,7 @@ use GatedAccess\Email_Address;
 use GatedAccess\Identities;
 use GatedAccess\Order_Attribution;
 use GatedAccess\Rep_Codes;
+use GatedAccess\Schema;
 
 /**
  * Lookup, history, and reassignment with its nonce and capability checks.
@@ -49,7 +50,7 @@ class Test_Identity_Screen extends WP_UnitTestCase {
 
 	public function set_up(): void {
 		parent::set_up();
-		update_option( Rep_Codes::OPTION, "anna: Anna Kowalska\nben: Ben Ortiz" );
+		$this->configure_reps();
 
 		$this->identities = new Identities();
 		$this->audit_log  = new Audit_Log();
@@ -88,7 +89,7 @@ class Test_Identity_Screen extends WP_UnitTestCase {
 		$order->update_meta_data( Order_Attribution::REP_META, 'anna' );
 		$order->save();
 		$this->audit_log->record_verification( $identity );
-		$this->audit_log->record( $identity->id, 'order.attributed', 'checkout', array( 'order_id' => $order->get_id() ) );
+		$this->audit_log->record( $identity->id, Audit_Log::ORDER_ATTRIBUTED, 'checkout', array( 'order_id' => $order->get_id() ) );
 
 		$html = $this->render_with_query( array( 'email' => 'Buyer@Example.com' ) );
 
@@ -183,7 +184,7 @@ class Test_Identity_Screen extends WP_UnitTestCase {
 
 		$identity = $this->buyer_with_rep( 'anna' );
 		$wpdb->insert(
-			$wpdb->prefix . 'gaa_audit_log',
+			Schema::table( Schema::AUDIT_LOG ),
 			array(
 				'identity_id' => $identity->id,
 				'event'       => 'rep.assigned',

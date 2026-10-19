@@ -10,6 +10,7 @@ use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
 use GatedAccess\Identity;
+use GatedAccess\Rep_Codes;
 use GatedAccess\Session;
 
 /**
@@ -44,6 +45,29 @@ trait GAA_Test_Helpers {
 			PHP_INT_MAX,
 			2
 		);
+	}
+
+	/**
+	 * Stores the two reps most tests assign buyers to.
+	 */
+	protected function configure_reps(): void {
+		update_option( Rep_Codes::OPTION, "anna: Anna Kowalska\nben: Ben Ortiz" );
+	}
+
+	/**
+	 * Drops the REST server so the next request builds fresh route objects, as WordPress's own REST test cases do.
+	 */
+	protected function reset_rest_server(): void {
+		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound -- Test-only reset of core's REST server singleton.
+	}
+
+	/**
+	 * A six-digit code guaranteed to differ from the given one.
+	 *
+	 * @param string $code Real code.
+	 */
+	protected function other_code( string $code ): string {
+		return sprintf( '%06d', ( (int) $code + 1 ) % 1000000 );
 	}
 
 	/**

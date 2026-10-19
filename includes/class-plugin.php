@@ -115,7 +115,7 @@ final class Plugin {
 		$this->schema             = new Schema();
 		$this->otp                = new Otp_Service( $hmac );
 		$this->audit_log          = new Audit_Log();
-		$this->sign_in_form       = new Sign_In_Form( $this->otp, $identities, $session, $page );
+		$this->sign_in_form       = new Sign_In_Form( $this->otp, $identities, $session, $page, new Request_Guard() );
 		$this->referral           = new Referral( $rep_codes, $identities, $this->audit_log, $cookies );
 		$this->order_attribution  = new Order_Attribution( $session, $rep_codes, $this->audit_log );
 		$this->checkout_prefill   = new Checkout_Prefill( $session );

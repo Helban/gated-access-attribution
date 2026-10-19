@@ -38,7 +38,7 @@ final class Identities {
 		global $wpdb;
 
 		$row = $wpdb->get_row(
-			$wpdb->prepare( 'SELECT * FROM %i WHERE email = %s', $this->table(), $email->value )
+			$wpdb->prepare( 'SELECT * FROM %i WHERE email = %s', $this->table(), $email->address )
 		);
 
 		return null === $row ? null : Identity::from_row( $row );
@@ -78,7 +78,7 @@ final class Identities {
 			$wpdb->prepare(
 				'INSERT INTO %i (email, verified_at, created_at) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE verified_at = %s',
 				$this->table(),
-				$email->value,
+				$email->address,
 				$now,
 				$now,
 				$now
@@ -146,6 +146,6 @@ final class Identities {
 	private function table(): string {
 		global $wpdb;
 
-		return $wpdb->prefix . Schema::IDENTITIES;
+		return Schema::table( Schema::IDENTITIES );
 	}
 }

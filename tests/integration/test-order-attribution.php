@@ -10,6 +10,7 @@ use GatedAccess\Identities;
 use GatedAccess\Order_Attribution;
 use GatedAccess\Referral;
 use GatedAccess\Rep_Codes;
+use GatedAccess\Schema;
 use GatedAccess\Session;
 
 /**
@@ -32,7 +33,7 @@ class Test_Order_Attribution extends WP_UnitTestCase {
 		parent::set_up();
 		add_filter( 'gaa_send_cookies', '__return_false' );
 
-		update_option( Rep_Codes::OPTION, "anna: Anna Kowalska\nben: Ben Ortiz" );
+		$this->configure_reps();
 		update_option(
 			'woocommerce_cod_settings',
 			array(
@@ -63,7 +64,7 @@ class Test_Order_Attribution extends WP_UnitTestCase {
 		// Checkout route keeps its order object in a property, and the session keeps the draft
 		// order ID; both would leak this test's order into the next one.
 		WC()->session->set( 'store_api_draft_order', null );
-		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Forces fresh route objects, as WordPress's REST test cases do.
+		$this->reset_rest_server();
 
 		parent::tear_down();
 	}
@@ -143,7 +144,7 @@ class Test_Order_Attribution extends WP_UnitTestCase {
 		$context = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT context FROM %i WHERE identity_id = %d AND event = 'order.attributed'",
-				$wpdb->prefix . 'gaa_audit_log',
+				Schema::table( Schema::AUDIT_LOG ),
 				$identity->id
 			)
 		);
@@ -237,8 +238,8 @@ class Test_Order_Attribution extends WP_UnitTestCase {
 		);
 
 		$prefixed = array();
-		foreach ( $fields as $key => $value ) {
-			$prefixed[ $prefix . $key ] = $value;
+		foreach ( $fields as $key => $field_value ) {
+			$prefixed[ $prefix . $key ] = $field_value;
 		}
 
 		return $prefixed;

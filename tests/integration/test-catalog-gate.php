@@ -75,7 +75,7 @@ class Test_Catalog_Gate extends WP_UnitTestCase {
 
 	public function tear_down(): void {
 		unset( $_COOKIE[ Session::COOKIE ], $_GET['wc-ajax'], $_REQUEST['add-to-cart'], $_REQUEST['action'] );
-		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Fresh routes per test, as WordPress's REST test cases do.
+		$this->reset_rest_server();
 		parent::tear_down();
 	}
 
@@ -179,37 +179,37 @@ class Test_Catalog_Gate extends WP_UnitTestCase {
 	 * @param string $route Route, with {id} standing for the product ID.
 	 */
 	public function test_rest_route_returns_no_products_to_an_anonymous_visitor( string $route ): void {
-		$response = $this->rest_get( $route );
+		$rest_reply = $this->rest_get( $route );
 
-		$this->assertContains( $response->get_status(), array( 401, 403 ) );
-		$this->assertCatalogAbsent( $response );
+		$this->assertContains( $rest_reply->get_status(), array( 401, 403 ) );
+		$this->assertCatalogAbsent( $rest_reply );
 	}
 
 	public function test_store_api_serves_products_to_a_verified_buyer(): void {
 		$this->sign_in_as( 'buyer@example.com' );
 
-		$response = $this->rest_get( '/wc/store/v1/products' );
+		$rest_reply = $this->rest_get( '/wc/store/v1/products' );
 
-		$this->assertSame( 200, $response->get_status() );
-		$this->assertStringContainsString( self::PRODUCT_NAME, wp_json_encode( $response->get_data() ) );
+		$this->assertSame( 200, $rest_reply->get_status() );
+		$this->assertStringContainsString( self::PRODUCT_NAME, wp_json_encode( $rest_reply->get_data() ) );
 	}
 
 	public function test_woocommerce_rest_api_still_serves_store_staff(): void {
 		wp_set_current_user( self::factory()->user->create( array( 'role' => 'shop_manager' ) ) );
 
-		$response = $this->rest_get( '/wc/v3/products/{id}' );
+		$rest_reply = $this->rest_get( '/wc/v3/products/{id}' );
 
-		$this->assertSame( 200, $response->get_status() );
-		$this->assertSame( self::PRODUCT_NAME, $response->get_data()['name'] );
+		$this->assertSame( 200, $rest_reply->get_status() );
+		$this->assertSame( self::PRODUCT_NAME, $rest_reply->get_data()['name'] );
 	}
 
 	public function test_verified_buyer_alone_does_not_unlock_the_woocommerce_rest_api(): void {
 		$this->sign_in_as( 'buyer@example.com' );
 
-		$response = $this->rest_get( '/wc/v3/products' );
+		$rest_reply = $this->rest_get( '/wc/v3/products' );
 
-		$this->assertSame( 401, $response->get_status() );
-		$this->assertCatalogAbsent( $response );
+		$this->assertSame( 401, $rest_reply->get_status() );
+		$this->assertCatalogAbsent( $rest_reply );
 	}
 
 	public function test_wc_ajax_request_is_refused_before_woocommerce_handles_it(): void {
@@ -227,10 +227,10 @@ class Test_Catalog_Gate extends WP_UnitTestCase {
 			$this->gate->guard_wc_ajax();
 			$this->fail( 'The wc-ajax request was not stopped.' );
 		} catch ( WPDieException $stopped ) {
-			$response = json_decode( (string) ob_get_clean(), true );
+			$ajax_reply = json_decode( (string) ob_get_clean(), true );
 		}
 
-		$this->assertFalse( $response['success'] );
+		$this->assertFalse( $ajax_reply['success'] );
 	}
 
 	public function test_add_to_cart_link_does_nothing_for_an_anonymous_visitor(): void {
@@ -247,9 +247,9 @@ class Test_Catalog_Gate extends WP_UnitTestCase {
 	}
 
 	public function test_woocommerce_admin_ajax_action_is_refused_to_an_anonymous_visitor(): void {
-		$response = $this->call_admin_ajax( 'woocommerce_get_variation' );
+		$ajax_reply = $this->call_admin_ajax( 'woocommerce_get_variation' );
 
-		$this->assertFalse( $response['success'] );
+		$this->assertFalse( $ajax_reply['success'] );
 	}
 
 	public function test_other_admin_ajax_actions_are_left_alone(): void {
@@ -347,10 +347,10 @@ class Test_Catalog_Gate extends WP_UnitTestCase {
 	/**
 	 * Asserts that neither the product's name nor its price is anywhere in the response.
 	 *
-	 * @param WP_REST_Response $response REST response.
+	 * @param WP_REST_Response $rest_reply REST response.
 	 */
-	private function assertCatalogAbsent( WP_REST_Response $response ): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Reads as a PHPUnit assertion.
-		$body = wp_json_encode( $response->get_data() );
+	private function assertCatalogAbsent( WP_REST_Response $rest_reply ): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid -- Reads as a PHPUnit assertion.
+		$body = wp_json_encode( $rest_reply->get_data() );
 
 		$this->assertStringNotContainsString( self::PRODUCT_NAME, $body );
 		$this->assertStringNotContainsString( '4917', $body );

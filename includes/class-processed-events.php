@@ -23,6 +23,7 @@ final class Processed_Events {
 	 * @param string $event_id   Sender's event ID.
 	 * @param string $event_type Event type, kept for the record.
 	 * @return bool True when this call claimed the event, false when it was claimed before.
+	 * @throws Storage_Error When the database failed, so "claimed before" cannot be told from "unknown".
 	 */
 	public function claim( string $event_id, string $event_type ): bool {
 		global $wpdb;
@@ -36,6 +37,10 @@ final class Processed_Events {
 				gmdate( 'Y-m-d H:i:s' )
 			)
 		);
+
+		if ( false === $inserted ) {
+			throw new Storage_Error( 'Could not claim the webhook event.' );
+		}
 
 		return 1 === $inserted;
 	}
@@ -57,6 +62,6 @@ final class Processed_Events {
 	private function table(): string {
 		global $wpdb;
 
-		return $wpdb->prefix . Schema::PROCESSED_EVENTS;
+		return Schema::table( Schema::PROCESSED_EVENTS );
 	}
 }

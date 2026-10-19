@@ -2,7 +2,7 @@
 
 A WooCommerce plugin for stores that sell only to approved buyers. Visitors arrive through a sales rep's referral link, sign in with a one-time code sent by email, and only then see the catalog and prices. Every order records, on the server, which rep brought the buyer.
 
-`NOTES.md` is the handover document: what was verified, what was not, and open questions.
+`NOTES.md` has the engineering notes: how the tests run, what was verified and what was not, design decisions, and open questions.
 
 ## Requirements
 
@@ -70,7 +70,7 @@ Without access:
 
 REST routes are matched on the pattern they were registered with (through `rest_dispatch_request`), not on the request path, so upper-case paths or the unversioned `/wc/store/` aliases do not get around it.
 
-Products are also kept out of places outside the gated pages: front-end and REST `WP_Query` calls (site search, `/wp/v2/search`, query loop blocks), WooCommerce product shortcodes, WooCommerce blocks other than the account link and store notices, oEmbed responses for products, and the XML sitemap (products and product taxonomies are left out for everyone). WooCommerce blocks are skipped in `pre_render_block`, before they run: some, such as the single-product block, load the product straight from the Store API controller and put it into the page's interactivity state, which hiding their HTML afterwards would not remove.
+Products are also kept out of places outside the gated pages: front-end, REST and admin-ajax `WP_Query` calls (site search, `/wp/v2/search`, query loop blocks), WooCommerce product shortcodes, WooCommerce blocks other than the account link and store notices, oEmbed responses for products, and the XML sitemap (products and product taxonomies are left out for everyone). WooCommerce blocks are skipped in `pre_render_block`, before they run: some, such as the single-product block, load the product straight from the Store API controller and put it into the page's interactivity state, which hiding their HTML afterwards would not remove.
 
 Any response whose content depends on who is asking is marked uncacheable: catalog pages, the sign-in page, and pages where a product query, WooCommerce product shortcode or WooCommerce block ran. That means `nocache_headers()` while headers can still be sent, the `DONOTCACHEPAGE` constant that page caching plugins check, and the `gaa_response_not_cacheable` action for hosts whose cache needs its own signal.
 
@@ -110,7 +110,8 @@ curl -X POST https://shop.example/wp-json/gated-access/v1/events \
 | 200 `processed` | The buyer now has the new rep; a `rep.reassigned` audit entry records the change with actor `webhook:<event_id>` |
 | 200 `unchanged` | The buyer already had that rep |
 | 200 `duplicate` | This `event_id` was processed before; nothing changed |
-| 400 | The body is not JSON, or does not match the schema (`event_id` is 1 to 128 of `A-Z a-z 0-9 . _ : -`) |
+| 400 | The body is not JSON, or does not match the schema (`event_id` is 1 to 92 of `A-Z a-z 0-9 . _ : -`, so that `webhook:<event_id>` fits the 100-character audit actor column) |
+| 503 | The claim or the audit entry could not be written to the database; nothing was applied, so the sender should retry |
 | 401 | Missing or wrong signature, or no secret of at least 32 characters is configured |
 | 404 | No identity has that email address |
 | 422 | The rep code is not configured |
@@ -165,7 +166,7 @@ WooCommerce > Buyer identities, for users with `manage_woocommerce`:
 
 - The menu entry, the screen and the reassignment handler each check `manage_woocommerce`.
 - Reassignment is a POST to `admin-post.php` with a nonce bound to the identity's ID (`gaa_reassign_rep_<id>`), checked with `check_admin_referer()`. A nonce issued for one identity does not work for another.
-- Every value printed is escaped where it is printed, including values read back from the audit log. The notice after a reassignment is chosen from three fixed messages by key; nothing from the URL is echoed.
+- Every value printed is escaped where it is printed, including values read back from the audit log. The notice after a reassignment is chosen from four fixed messages by key; nothing from the URL is echoed.
 
 ## Data model
 

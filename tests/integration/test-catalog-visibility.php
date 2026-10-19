@@ -35,7 +35,7 @@ class Test_Catalog_Visibility extends WP_UnitTestCase {
 
 	public function tear_down(): void {
 		unset( $_COOKIE[ Session::COOKIE ] );
-		$GLOBALS['wp_rest_server'] = null; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Fresh routes per test, as WordPress's REST test cases do.
+		$this->reset_rest_server();
 		parent::tear_down();
 	}
 
@@ -47,6 +47,23 @@ class Test_Catalog_Visibility extends WP_UnitTestCase {
 
 	public function test_product_query_finds_the_product_for_a_verified_buyer(): void {
 		$this->sign_in_as( 'buyer@example.com' );
+
+		$query = new WP_Query( array( 'post_type' => 'product' ) );
+
+		$this->assertSame( array( $this->product->get_id() ), wp_list_pluck( $query->posts, 'ID' ) );
+	}
+
+	public function test_product_query_in_admin_ajax_finds_nothing_for_an_anonymous_visitor(): void {
+		$this->pretend_admin_ajax();
+
+		$query = new WP_Query( array( 'post_type' => 'product' ) );
+
+		$this->assertSame( 0, $query->post_count );
+	}
+
+	public function test_product_query_in_admin_ajax_still_works_for_store_staff(): void {
+		$this->pretend_admin_ajax();
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'shop_manager' ) ) );
 
 		$query = new WP_Query( array( 'post_type' => 'product' ) );
 
@@ -73,10 +90,10 @@ class Test_Catalog_Visibility extends WP_UnitTestCase {
 		$request = new WP_REST_Request( 'GET', '/wp/v2/search' );
 		$request->set_param( 'search', self::PRODUCT_NAME );
 
-		$response = rest_do_request( $request );
+		$search_reply = rest_do_request( $request );
 
-		$this->assertSame( 200, $response->get_status() );
-		$this->assertStringNotContainsString( self::PRODUCT_NAME, wp_json_encode( $response->get_data() ) );
+		$this->assertSame( 200, $search_reply->get_status() );
+		$this->assertStringNotContainsString( self::PRODUCT_NAME, wp_json_encode( $search_reply->get_data() ) );
 	}
 
 	public function test_products_shortcode_prints_nothing_for_an_anonymous_visitor(): void {
@@ -162,6 +179,14 @@ class Test_Catalog_Visibility extends WP_UnitTestCase {
 		$this->assertArrayHasKey( 'post', $post_types );
 		$this->assertArrayNotHasKey( 'product_cat', $taxonomies );
 		$this->assertArrayNotHasKey( 'product_tag', $taxonomies );
+	}
+
+	/**
+	 * Makes the request look like admin-ajax.php: is_admin() is true there, even for visitors who are not logged in.
+	 */
+	private function pretend_admin_ajax(): void {
+		set_current_screen( 'dashboard' );
+		add_filter( 'wp_doing_ajax', '__return_true' );
 	}
 
 	/**

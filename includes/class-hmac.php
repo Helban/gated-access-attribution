@@ -18,12 +18,12 @@ defined( 'ABSPATH' ) || exit;
 final class Hmac {
 
 	/**
-	 * Returns a hex digest of the value for the given purpose.
+	 * Returns a hex digest of the message for the given purpose.
 	 *
 	 * @param string $purpose Short label naming what the digest is for.
-	 * @param string $value   Data to digest.
+	 * @param string $message Data to digest.
 	 */
-	public function digest( string $purpose, string $value ): string {
-		return hash_hmac( 'sha256', $purpose . '|' . $value, wp_salt( 'auth' ) );
+	public function digest( string $purpose, string $message ): string {
+		return hash_hmac( 'sha256', $purpose . '|' . $message, wp_salt( 'auth' ) );
 	}
 }

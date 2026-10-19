@@ -36,13 +36,18 @@ class Test_Otp_Service extends WP_UnitTestCase {
 	private string $table;
 
 	public function set_up(): void {
-		global $wpdb;
-
 		parent::set_up();
 		reset_phpmailer_instance();
 
 		$this->otp   = new Otp_Service( new Hmac() );
-		$this->table = $wpdb->prefix . Schema::OTP_REQUESTS;
+		$this->table = Schema::table( Schema::OTP_REQUESTS );
+	}
+
+	public function tear_down(): void {
+		global $wpdb;
+
+		$wpdb->suppress_errors( false );
+		parent::tear_down();
 	}
 
 	public function test_mails_a_six_digit_code_to_the_address(): void {
@@ -219,6 +224,26 @@ class Test_Otp_Service extends WP_UnitTestCase {
 		);
 	}
 
+	public function test_a_failing_address_limit_query_blocks_the_request(): void {
+		$this->break_queries_containing( 'last_window' );
+
+		$this->assert_sign_in_error(
+			Sign_In_Error::RATE_LIMITED,
+			fn () => $this->otp->request_code( Email_Address::parse( 'buyer@example.com' ), self::IP )
+		);
+		$this->assertCount( 0, tests_retrieve_phpmailer_instance()->mock_sent );
+	}
+
+	public function test_a_failing_ip_limit_query_blocks_the_request(): void {
+		$this->break_queries_containing( 'WHERE ip_hash' );
+
+		$this->assert_sign_in_error(
+			Sign_In_Error::RATE_LIMITED,
+			fn () => $this->otp->request_code( Email_Address::parse( 'buyer@example.com' ), self::IP )
+		);
+		$this->assertCount( 0, tests_retrieve_phpmailer_instance()->mock_sent );
+	}
+
 	public function test_known_and_unknown_addresses_are_treated_the_same(): void {
 		( new Identities() )->record_verification( Email_Address::parse( 'known@example.com' ) );
 
@@ -269,12 +294,18 @@ class Test_Otp_Service extends WP_UnitTestCase {
 	}
 
 	/**
-	 * A six-digit code guaranteed to differ from the given one.
+	 * Makes every SQL statement that contains the fragment fail, as a dropped table or a lost connection would.
 	 *
-	 * @param string $code Real code.
+	 * @param string $fragment Text identifying the statement.
 	 */
-	private function other_code( string $code ): string {
-		return sprintf( '%06d', ( (int) $code + 1 ) % 1000000 );
+	private function break_queries_containing( string $fragment ): void {
+		global $wpdb;
+
+		$wpdb->suppress_errors( true );
+		add_filter(
+			'query',
+			static fn ( string $sql ): string => str_contains( $sql, $fragment ) ? 'SELECT * FROM gaa_table_that_does_not_exist' : $sql
+		);
 	}
 
 	/**

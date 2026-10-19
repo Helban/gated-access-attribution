@@ -24,6 +24,17 @@ final class Webhook_Controller {
 	public const MIN_SECRET_LENGTH    = 32;
 	public const SIGNATURE_HEADER     = 'X-GAA-Signature';
 	public const EVENT_REP_REASSIGNED = 'identity.rep_reassigned';
+	public const ACTOR_PREFIX         = 'webhook:';
+
+	/**
+	 * Length of the secret generated on activation.
+	 */
+	public const GENERATED_SECRET_LENGTH = 64;
+
+	/**
+	 * Longest event ID that still fits the audit actor "webhook:<id>" (the prefix is 8 characters).
+	 */
+	public const EVENT_ID_MAX_LENGTH = Audit_Log::ACTOR_MAX_LENGTH - 8;
 
 	/**
 	 * Sets up the endpoint.
@@ -63,7 +74,7 @@ final class Webhook_Controller {
 					'event_id' => array(
 						'description' => __( 'Sender-assigned ID. An ID already processed is acknowledged and ignored.', 'gated-access-attribution' ),
 						'type'        => 'string',
-						'pattern'     => '^[A-Za-z0-9._:-]{1,128}$',
+						'pattern'     => sprintf( '^[A-Za-z0-9._:-]{1,%d}$', self::EVENT_ID_MAX_LENGTH ),
 						'required'    => true,
 					),
 					'type'     => array(
@@ -150,7 +161,13 @@ final class Webhook_Controller {
 
 		$event_id = (string) $event['event_id'];
 
-		if ( ! $this->events->claim( $event_id, (string) $event['type'] ) ) {
+		try {
+			$claimed = $this->events->claim( $event_id, (string) $event['type'] );
+		} catch ( Storage_Error $error ) {
+			return $this->storage_unavailable();
+		}
+
+		if ( ! $claimed ) {
 			return $this->acknowledge( $event_id, 'duplicate' );
 		}
 
@@ -167,13 +184,13 @@ final class Webhook_Controller {
 	/**
 	 * Moves the identity named in the event to the rep named in the event.
 	 *
-	 * @param string               $event_id Event ID, recorded as the actor.
-	 * @param array<string, mixed> $data     Event payload.
+	 * @param string               $event_id   Event ID, recorded as the actor.
+	 * @param array<string, mixed> $rep_change The event's data object: email and rep_code.
 	 * @return string|\WP_Error "processed", "unchanged", or why the event was refused.
 	 */
-	private function reassign_rep( string $event_id, array $data ) {
+	private function reassign_rep( string $event_id, array $rep_change ) {
 		try {
-			$email = Email_Address::parse( (string) $data['email'] );
+			$email = Email_Address::parse( (string) $rep_change['email'] );
 		} catch ( \InvalidArgumentException $error ) {
 			return new \WP_Error( 'gaa_invalid_email', __( 'The email address is not valid.', 'gated-access-attribution' ), array( 'status' => 400 ) );
 		}
@@ -183,7 +200,7 @@ final class Webhook_Controller {
 			return new \WP_Error( 'gaa_unknown_identity', __( 'No identity has that email address.', 'gated-access-attribution' ), array( 'status' => 404 ) );
 		}
 
-		$rep_code = $this->rep_codes->find( (string) $data['rep_code'] );
+		$rep_code = $this->rep_codes->find( (string) $rep_change['rep_code'] );
 		if ( null === $rep_code ) {
 			return new \WP_Error( 'gaa_unknown_rep', __( 'That rep code is not configured.', 'gated-access-attribution' ), array( 'status' => 422 ) );
 		}
@@ -192,18 +209,35 @@ final class Webhook_Controller {
 			return 'unchanged';
 		}
 
+		// Audit first: if the entry cannot be written, the rep is untouched and the retry starts clean.
+		try {
+			$this->audit_log->record(
+				$identity->id,
+				'rep.reassigned',
+				self::ACTOR_PREFIX . $event_id,
+				array(
+					'from' => $identity->rep_code,
+					'to'   => $rep_code,
+				)
+			);
+		} catch ( Storage_Error $error ) {
+			return $this->storage_unavailable();
+		}
+
 		$this->identities->assign_rep( $identity->id, $rep_code );
-		$this->audit_log->record(
-			$identity->id,
-			'rep.reassigned',
-			'webhook:' . $event_id,
-			array(
-				'from' => $identity->rep_code,
-				'to'   => $rep_code,
-			)
-		);
 
 		return 'processed';
+	}
+
+	/**
+	 * 503 for a database failure: the sender retries instead of treating the event as handled.
+	 */
+	private function storage_unavailable(): \WP_Error {
+		return new \WP_Error(
+			'gaa_storage_unavailable',
+			__( 'The event could not be stored. Try again later.', 'gated-access-attribution' ),
+			array( 'status' => 503 )
+		);
 	}
 
 	/**

@@ -80,15 +80,23 @@ final class Order_Attribution {
 		}
 		$order->save();
 
-		$this->audit_log->record(
-			$identity->id,
-			'order.attributed',
-			'checkout',
-			array(
-				'order_id' => $order->get_id(),
-				'rep_code' => $identity->rep_code,
-			)
-		);
+		try {
+			$this->audit_log->record(
+				$identity->id,
+				Audit_Log::ORDER_ATTRIBUTED,
+				'checkout',
+				array(
+					'order_id' => $order->get_id(),
+					'rep_code' => $identity->rep_code,
+				)
+			);
+		} catch ( Storage_Error $error ) {
+			// The order is already placed and carries its rep; the buyer must not see a failed checkout over a log row.
+			wc_get_logger()->error(
+				sprintf( 'Could not write the audit entry for order %d.', $order->get_id() ),
+				array( 'source' => 'gated-access-attribution' )
+			);
+		}
 	}
 
 	/**

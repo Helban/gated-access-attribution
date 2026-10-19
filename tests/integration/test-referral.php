@@ -13,6 +13,8 @@ use GatedAccess\Identities;
 use GatedAccess\Otp_Service;
 use GatedAccess\Referral;
 use GatedAccess\Rep_Codes;
+use GatedAccess\Request_Guard;
+use GatedAccess\Schema;
 use GatedAccess\Session;
 use GatedAccess\Sign_In_Form;
 use GatedAccess\Sign_In_Page;
@@ -41,7 +43,7 @@ class Test_Referral extends WP_UnitTestCase {
 	public function set_up(): void {
 		parent::set_up();
 		add_filter( 'gaa_send_cookies', '__return_false' );
-		update_option( Rep_Codes::OPTION, "anna: Anna Kowalska\nben: Ben Ortiz" );
+		$this->configure_reps();
 
 		$this->identities = new Identities();
 		$this->referral   = new Referral( new Rep_Codes(), $this->identities, new Audit_Log(), new Cookies() );
@@ -109,7 +111,7 @@ class Test_Referral extends WP_UnitTestCase {
 		$this->referral->bind( $identity );
 
 		$row = $wpdb->get_row(
-			$wpdb->prepare( "SELECT actor, context FROM %i WHERE identity_id = %d AND event = 'rep.assigned'", $wpdb->prefix . 'gaa_audit_log', $identity->id )
+			$wpdb->prepare( "SELECT actor, context FROM %i WHERE identity_id = %d AND event = 'rep.assigned'", Schema::table( Schema::AUDIT_LOG ), $identity->id )
 		);
 		$this->assertSame( 'referral-link', $row->actor );
 		$this->assertSame( array( 'rep_code' => 'ben' ), json_decode( $row->context, true ) );
@@ -139,7 +141,8 @@ class Test_Referral extends WP_UnitTestCase {
 			new Otp_Service( new Hmac() ),
 			$this->identities,
 			new Session( $this->identities, new Hmac(), new Cookies() ),
-			new Sign_In_Page()
+			new Sign_In_Page(),
+			new Request_Guard()
 		);
 
 		$_POST = array(

@@ -25,9 +25,9 @@ final class Email_Address {
 	/**
 	 * Wraps an already normalised address.
 	 *
-	 * @param string $value Normalised address.
+	 * @param string $address Normalised address.
 	 */
-	private function __construct( public readonly string $value ) {
+	private function __construct( public readonly string $address ) {
 	}
 
 	/**
@@ -37,12 +37,12 @@ final class Email_Address {
 	 * @throws \InvalidArgumentException When the input is not a usable address.
 	 */
 	public static function parse( string $raw ): self {
-		$value = strtolower( trim( $raw ) );
+		$address = strtolower( trim( $raw ) );
 
-		if ( strlen( $value ) > self::MAX_LENGTH || ! is_email( $value ) ) {
+		if ( strlen( $address ) > self::MAX_LENGTH || ! is_email( $address ) ) {
 			throw new \InvalidArgumentException( 'Not a valid email address.' );
 		}
 
-		return new self( $value );
+		return new self( $address );
 	}
 }

@@ -15,6 +15,7 @@ use GatedAccess\Identity;
 use GatedAccess\Order_Attribution;
 use GatedAccess\Rep_Codes;
 use GatedAccess\Settings;
+use GatedAccess\Storage_Error;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -97,7 +98,7 @@ final class Identity_Screen {
 		}
 
 		$rep_code = $this->rep_codes->find( isset( $_POST['rep_code'] ) ? sanitize_text_field( wp_unslash( $_POST['rep_code'] ) ) : '' );
-		$outcome  = $this->reassign( $identity, $rep_code );
+		$outcome  = null === $rep_code ? 'unknown_rep' : $this->reassign( $identity, $rep_code );
 
 		wp_safe_redirect(
 			$this->url(
@@ -138,29 +139,31 @@ final class Identity_Screen {
 	/**
 	 * Applies a reassignment and names the outcome for the notice.
 	 *
-	 * @param Identity    $identity Identity to move.
-	 * @param string|null $rep_code Configured rep code, or null if the posted one is unknown.
-	 * @return string "reassigned", "unchanged" or "unknown_rep".
+	 * @param Identity $identity Identity to move.
+	 * @param string   $rep_code Configured rep code.
+	 * @return string "reassigned", "unchanged" or "failed".
 	 */
-	private function reassign( Identity $identity, ?string $rep_code ): string {
-		if ( null === $rep_code ) {
-			return 'unknown_rep';
-		}
-
+	private function reassign( Identity $identity, string $rep_code ): string {
 		if ( $rep_code === $identity->rep_code ) {
 			return 'unchanged';
 		}
 
+		// Audit first: if the entry cannot be written, the rep is untouched.
+		try {
+			$this->audit_log->record(
+				$identity->id,
+				'rep.reassigned',
+				'user:' . get_current_user_id(),
+				array(
+					'from' => $identity->rep_code,
+					'to'   => $rep_code,
+				)
+			);
+		} catch ( Storage_Error $error ) {
+			return 'failed';
+		}
+
 		$this->identities->assign_rep( $identity->id, $rep_code );
-		$this->audit_log->record(
-			$identity->id,
-			'rep.reassigned',
-			'user:' . get_current_user_id(),
-			array(
-				'from' => $identity->rep_code,
-				'to'   => $rep_code,
-			)
-		);
 
 		return 'reassigned';
 	}
@@ -171,13 +174,14 @@ final class Identity_Screen {
 	 * Only known keys produce text, so nothing from the URL is echoed.
 	 */
 	private function render_notice(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Selects one of three fixed messages.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Selects one of four fixed messages.
 		$notice = isset( $_GET['gaa_notice'] ) ? sanitize_key( wp_unslash( $_GET['gaa_notice'] ) ) : '';
 
 		$messages = array(
 			'reassigned'  => array( 'success', __( 'Sales rep changed.', 'gated-access-attribution' ) ),
 			'unchanged'   => array( 'info', __( 'The buyer already had that rep.', 'gated-access-attribution' ) ),
 			'unknown_rep' => array( 'error', __( 'That rep code is not configured.', 'gated-access-attribution' ) ),
+			'failed'      => array( 'error', __( 'The change could not be saved. Try again.', 'gated-access-attribution' ) ),
 		);
 
 		if ( isset( $messages[ $notice ] ) ) {
@@ -233,8 +237,8 @@ final class Identity_Screen {
 				<?php foreach ( $identities as $identity ) : ?>
 					<tr>
 						<td><a href="<?php echo esc_url( $this->url( array( 'email' => rawurlencode( $identity->email ) ) ) ); ?>"><?php echo esc_html( $identity->email ); ?></a></td>
-						<td><?php echo esc_html( $this->rep_label( $identity->rep_code ) ); ?></td>
-						<td><?php echo esc_html( $this->format_time( $identity->verified_at ) ); ?></td>
+						<td><?php echo esc_html( $this->rep_label( $identity->rep_code ?? '' ) ); ?></td>
+						<td><?php echo esc_html( $this->verified_label( $identity ) ); ?></td>
 					</tr>
 				<?php endforeach; ?>
 			</tbody>
@@ -281,11 +285,11 @@ final class Identity_Screen {
 			</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Sales rep', 'gated-access-attribution' ); ?></th>
-				<td><?php echo esc_html( $this->rep_label( $identity->rep_code ) ); ?></td>
+				<td><?php echo esc_html( $this->rep_label( $identity->rep_code ?? '' ) ); ?></td>
 			</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'Last verified', 'gated-access-attribution' ); ?></th>
-				<td><?php echo esc_html( $this->format_time( $identity->verified_at ) ); ?></td>
+				<td><?php echo esc_html( $this->verified_label( $identity ) ); ?></td>
 			</tr>
 			<tr>
 				<th scope="row"><?php esc_html_e( 'First verified', 'gated-access-attribution' ); ?></th>
@@ -419,7 +423,7 @@ final class Identity_Screen {
 	private function render_event_details( Audit_Entry $entry ): void {
 		$context = $entry->context;
 
-		if ( 'order.attributed' === $entry->event && isset( $context['order_id'] ) ) {
+		if ( Audit_Log::ORDER_ATTRIBUTED === $entry->event && isset( $context['order_id'] ) ) {
 			$order = wc_get_order( (int) $context['order_id'] );
 			if ( $order instanceof \WC_Order ) {
 				printf( '<a href="%1$s">#%2$s</a>', esc_url( $order->get_edit_order_url() ), esc_html( $order->get_order_number() ) );
@@ -445,12 +449,12 @@ final class Identity_Screen {
 	}
 
 	/**
-	 * Rep name and code, or "None".
+	 * Rep name and code, or "None" for an empty code.
 	 *
-	 * @param string|null $rep_code Rep code.
+	 * @param string $rep_code Rep code, empty when there is none.
 	 */
-	private function rep_label( ?string $rep_code ): string {
-		if ( null === $rep_code || '' === $rep_code ) {
+	private function rep_label( string $rep_code ): string {
+		if ( '' === $rep_code ) {
 			return __( 'None', 'gated-access-attribution' );
 		}
 
@@ -464,11 +468,11 @@ final class Identity_Screen {
 	 */
 	private function event_label( string $event ): string {
 		return match ( $event ) {
-			'identity.verified' => __( 'Signed in', 'gated-access-attribution' ),
-			'rep.assigned'      => __( 'Rep assigned', 'gated-access-attribution' ),
-			'rep.reassigned'    => __( 'Rep changed', 'gated-access-attribution' ),
-			'order.attributed'  => __( 'Order attributed', 'gated-access-attribution' ),
-			default             => $event,
+			'identity.verified'         => __( 'Signed in', 'gated-access-attribution' ),
+			'rep.assigned'              => __( 'Rep assigned', 'gated-access-attribution' ),
+			'rep.reassigned'            => __( 'Rep changed', 'gated-access-attribution' ),
+			Audit_Log::ORDER_ATTRIBUTED => __( 'Order attributed', 'gated-access-attribution' ),
+			default                     => $event,
 		};
 	}
 
@@ -497,15 +501,20 @@ final class Identity_Screen {
 	}
 
 	/**
+	 * When the buyer last verified, or "Never".
+	 *
+	 * @param Identity $identity Identity to describe.
+	 */
+	private function verified_label( Identity $identity ): string {
+		return $identity->is_verified() ? $this->format_time( $identity->verified_at ) : __( 'Never', 'gated-access-attribution' );
+	}
+
+	/**
 	 * Formats a UTC time in the site's time zone and formats.
 	 *
-	 * @param \DateTimeImmutable|null $time Time to format.
+	 * @param \DateTimeImmutable $time Time to format.
 	 */
-	private function format_time( ?\DateTimeImmutable $time ): string {
-		if ( null === $time ) {
-			return __( 'Never', 'gated-access-attribution' );
-		}
-
+	private function format_time( \DateTimeImmutable $time ): string {
 		return (string) wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $time->getTimestamp() );
 	}
 }

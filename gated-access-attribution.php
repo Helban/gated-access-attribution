@@ -39,7 +39,7 @@ function activate(): void {
 	( new Sign_In_Page() )->ensure_exists();
 
 	// add_option() leaves an existing secret alone. Not autoloaded: only the webhook reads it.
-	add_option( Webhook_Controller::SECRET_OPTION, wp_generate_password( 64, false ), '', false );
+	add_option( Webhook_Controller::SECRET_OPTION, wp_generate_password( Webhook_Controller::GENERATED_SECRET_LENGTH, false ), '', false );
 }
 
 /**

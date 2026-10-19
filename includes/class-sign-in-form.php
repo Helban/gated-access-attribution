@@ -52,16 +52,18 @@ final class Sign_In_Form {
 	/**
 	 * Sets up the form.
 	 *
-	 * @param Otp_Service  $otp        Code issuing and checking.
-	 * @param Identities   $identities Identity repository.
-	 * @param Session      $session    Signed-in session.
-	 * @param Sign_In_Page $page       The page hosting the form.
+	 * @param Otp_Service   $otp           Code issuing and checking.
+	 * @param Identities    $identities    Identity repository.
+	 * @param Session       $session       Signed-in session.
+	 * @param Sign_In_Page  $page          The page hosting the form.
+	 * @param Request_Guard $request_guard Origin, client IP and return URL checks.
 	 */
 	public function __construct(
 		private readonly Otp_Service $otp,
 		private readonly Identities $identities,
 		private readonly Session $session,
 		private readonly Sign_In_Page $page,
+		private readonly Request_Guard $request_guard,
 	) {
 	}
 
@@ -96,19 +98,32 @@ final class Sign_In_Form {
 
 		$nonce = isset( $_POST[ self::NONCE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ) : '';
 
-		if ( ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) || ! $this->is_same_origin() ) {
+		if ( ! wp_verify_nonce( $nonce, self::NONCE_ACTION ) || ! $this->request_guard->is_same_origin() ) {
 			$this->error = __( 'The form expired. Please try again.', 'gated-access-attribution' );
 			return;
 		}
 
 		$action = sanitize_key( wp_unslash( $_POST['gaa_action'] ) );
 
-		if ( 'request_code' === $action ) {
-			$this->request_code();
-		} elseif ( 'verify_code' === $action ) {
-			$this->verify_code();
-		} elseif ( 'sign_out' === $action ) {
+		if ( 'sign_out' === $action ) {
 			$this->sign_out();
+		}
+
+		if ( 'request_code' !== $action && 'verify_code' !== $action ) {
+			return;
+		}
+
+		try {
+			$email = $this->posted_email();
+		} catch ( \InvalidArgumentException $error ) {
+			$this->error = __( 'Enter a valid email address.', 'gated-access-attribution' );
+			return;
+		}
+
+		if ( 'request_code' === $action ) {
+			$this->request_code( $email );
+		} else {
+			$this->verify_code( $email );
 		}
 	}
 
@@ -180,46 +195,37 @@ final class Sign_In_Form {
 
 	/**
 	 * Step one: email a code.
+	 *
+	 * @param Email_Address $email Address from the form.
 	 */
-	private function request_code(): void {
-		$email = $this->posted_email();
-
-		if ( null === $email ) {
-			$this->error = __( 'Enter a valid email address.', 'gated-access-attribution' );
-			return;
-		}
-
+	private function request_code( Email_Address $email ): void {
 		$this->step  = 'code';
-		$this->email = $email->value;
+		$this->email = $email->address;
 
 		try {
-			$this->otp->request_code( $email, $this->client_ip() );
+			$this->otp->request_code( $email, $this->request_guard->client_ip() );
 		} catch ( Sign_In_Error $error ) {
 			$this->error = $this->message_for( $error );
 			return;
 		}
 
 		$this->notice = sprintf(
-			/* translators: 1: email address, 2: minutes until the code expires. */
-			__( 'We sent a 6-digit code to %1$s. It expires in %2$d minutes.', 'gated-access-attribution' ),
-			$email->value,
-			Otp_Service::CODE_TTL / MINUTE_IN_SECONDS
+			/* translators: 1: email address, 2: minutes until the code expires, 3: number of digits in the code. */
+			__( 'We sent a %3$d-digit code to %1$s. It expires in %2$d minutes.', 'gated-access-attribution' ),
+			$email->address,
+			Otp_Service::CODE_TTL / MINUTE_IN_SECONDS,
+			Otp_Service::CODE_LENGTH
 		);
 	}
 
 	/**
 	 * Step two: check the code and sign in.
+	 *
+	 * @param Email_Address $email Address from the form.
 	 */
-	private function verify_code(): void {
-		$email = $this->posted_email();
-
-		if ( null === $email ) {
-			$this->error = __( 'Enter a valid email address.', 'gated-access-attribution' );
-			return;
-		}
-
+	private function verify_code( Email_Address $email ): void {
 		$this->step  = 'code';
-		$this->email = $email->value;
+		$this->email = $email->address;
 		$code        = isset( $_POST['code'] ) ? sanitize_text_field( wp_unslash( $_POST['code'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Checked in handle_submission().
 
 		try {
@@ -236,7 +242,13 @@ final class Sign_In_Form {
 		 *
 		 * @param Identity $identity The verified identity, as stored before this hook.
 		 */
-		do_action( 'gaa_identity_verified', $identity );
+		try {
+			do_action( 'gaa_identity_verified', $identity );
+		} catch ( Storage_Error $error ) {
+			// The audit trail is part of signing in; do not start a session it has no record of.
+			$this->error = $this->message_for( Sign_In_Error::unavailable() );
+			return;
+		}
 
 		$this->session->start( $identity );
 		wp_safe_redirect( $this->redirect_target() );
@@ -253,16 +265,14 @@ final class Sign_In_Form {
 	}
 
 	/**
-	 * The posted address, or null when it is missing or malformed.
+	 * The posted address.
+	 *
+	 * @throws \InvalidArgumentException When it is missing or malformed.
 	 */
-	private function posted_email(): ?Email_Address {
+	private function posted_email(): Email_Address {
 		$raw = isset( $_POST['email'] ) ? sanitize_text_field( wp_unslash( $_POST['email'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Checked in handle_submission().
 
-		try {
-			return Email_Address::parse( $raw );
-		} catch ( \InvalidArgumentException $error ) {
-			return null;
-		}
+		return Email_Address::parse( $raw );
 	}
 
 	/**
@@ -279,66 +289,10 @@ final class Sign_In_Form {
 	}
 
 	/**
-	 * Rejects form posts whose Origin header names another site.
-	 *
-	 * A second line of defence next to the nonce, which is shared by every
-	 * logged-out visitor. Browsers that omit Origin fall back to the nonce alone.
-	 */
-	private function is_same_origin(): bool {
-		if ( ! isset( $_SERVER['HTTP_ORIGIN'] ) ) {
-			return true;
-		}
-
-		$origin = wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['HTTP_ORIGIN'] ) ) );
-		$home   = wp_parse_url( home_url() );
-
-		return is_array( $origin ) && isset( $origin['host'], $home['host'] )
-			&& strtolower( $origin['host'] ) === strtolower( $home['host'] )
-			&& ( $origin['port'] ?? null ) === ( $home['port'] ?? null );
-	}
-
-	/**
-	 * Client IP for per-IP rate limits.
-	 */
-	private function client_ip(): string {
-		$remote_addr = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-
-		/**
-		 * Filters the IP address used for per-IP rate limits.
-		 *
-		 * Only REMOTE_ADDR is trusted by default, because X-Forwarded-For and
-		 * similar headers can be set by anyone. A site behind a reverse proxy it
-		 * controls should return the forwarded client address here.
-		 *
-		 * @param string $remote_addr The connecting address.
-		 */
-		$client_ip = (string) apply_filters( 'gaa_client_ip', $remote_addr );
-
-		return false === filter_var( $client_ip, FILTER_VALIDATE_IP ) ? '0.0.0.0' : $client_ip;
-	}
-
-	/**
-	 * Same-site URL the visitor asked to return to, or an empty string.
-	 */
-	private function requested_redirect(): string {
-		// phpcs:disable WordPress.Security.NonceVerification -- Read-only, and validated to a same-site URL before use.
-		if ( isset( $_POST['redirect_to'] ) ) {
-			$raw = esc_url_raw( wp_unslash( $_POST['redirect_to'] ) );
-		} elseif ( isset( $_GET['redirect_to'] ) ) {
-			$raw = esc_url_raw( wp_unslash( $_GET['redirect_to'] ) );
-		} else {
-			$raw = '';
-		}
-		// phpcs:enable
-
-		return (string) wp_validate_redirect( $raw, '' );
-	}
-
-	/**
 	 * Where to send the buyer after signing in.
 	 */
 	private function redirect_target(): string {
-		$requested = $this->requested_redirect();
+		$requested = $this->request_guard->requested_redirect();
 
 		return '' !== $requested ? $requested : wc_get_page_permalink( 'shop' );
 	}
@@ -379,8 +333,13 @@ final class Sign_In_Form {
 		?>
 		<form method="post" class="woocommerce-form gaa-sign-in__code">
 			<p class="form-row form-row-wide">
-				<label for="gaa-code"><?php esc_html_e( '6-digit code', 'gated-access-attribution' ); ?></label>
-				<input type="text" class="input-text" name="code" id="gaa-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+				<label for="gaa-code">
+					<?php
+					/* translators: %d: number of digits in the code. */
+					echo esc_html( sprintf( __( '%d-digit code', 'gated-access-attribution' ), Otp_Service::CODE_LENGTH ) );
+					?>
+				</label>
+				<input type="text" class="input-text" name="code" id="gaa-code" inputmode="numeric" pattern="[0-9]{<?php echo esc_attr( (string) Otp_Service::CODE_LENGTH ); ?>}" maxlength="<?php echo esc_attr( (string) Otp_Service::CODE_LENGTH ); ?>" autocomplete="one-time-code" required>
 			</p>
 			<input type="hidden" name="email" value="<?php echo esc_attr( $this->email ); ?>">
 			<?php $this->render_hidden_fields( 'verify_code' ); ?>
@@ -390,7 +349,7 @@ final class Sign_In_Form {
 			<input type="hidden" name="email" value="<?php echo esc_attr( $this->email ); ?>">
 			<?php $this->render_hidden_fields( 'request_code' ); ?>
 			<button type="submit" class="gaa-link-button"><?php esc_html_e( 'Send a new code', 'gated-access-attribution' ); ?></button>
-			<a class="gaa-link-button" href="<?php echo esc_url( $this->page->url( $this->requested_redirect() ) ); ?>"><?php esc_html_e( 'Use a different email address', 'gated-access-attribution' ); ?></a>
+			<a class="gaa-link-button" href="<?php echo esc_url( $this->page->url( $this->request_guard->requested_redirect() ) ); ?>"><?php esc_html_e( 'Use a different email address', 'gated-access-attribution' ); ?></a>
 		</form>
 		<?php
 	}
@@ -428,6 +387,6 @@ final class Sign_In_Form {
 		printf( '<input type="hidden" name="gaa_action" value="%s">', esc_attr( $action ) );
 		// Not wp_nonce_field(): it prints a fixed id, and the code step has two forms.
 		printf( '<input type="hidden" name="%s" value="%s">', esc_attr( self::NONCE_FIELD ), esc_attr( wp_create_nonce( self::NONCE_ACTION ) ) );
-		printf( '<input type="hidden" name="redirect_to" value="%s">', esc_attr( $this->requested_redirect() ) );
+		printf( '<input type="hidden" name="redirect_to" value="%s">', esc_attr( $this->request_guard->requested_redirect() ) );
 	}
 }

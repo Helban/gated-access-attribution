@@ -78,7 +78,8 @@ final class Catalog_Visibility {
 	 * @param \WP_Query $query Query about to run.
 	 */
 	public function filter_query( $query ): void {
-		if ( ! $query instanceof \WP_Query || is_admin() || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+		// is_admin() is also true for admin-ajax.php, which logged-out visitors can reach through nopriv actions.
+		if ( ! $query instanceof \WP_Query || ( is_admin() && ! wp_doing_ajax() ) || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 			return;
 		}
 
@@ -161,16 +162,16 @@ final class Catalog_Visibility {
 	/**
 	 * Refuses oEmbed data for products, which would include title and excerpt.
 	 *
-	 * @param array|false $data Embed data.
-	 * @param \WP_Post    $post Embedded post.
+	 * @param array|false $embed_data Embed data.
+	 * @param \WP_Post    $post       Embedded post.
 	 * @return array|false
 	 */
-	public function filter_embed( $data, $post ) {
+	public function filter_embed( $embed_data, $post ) {
 		if ( $post instanceof \WP_Post && in_array( $post->post_type, self::PRODUCT_POST_TYPES, true ) && ! $this->access->is_granted() ) {
 			return false;
 		}
 
-		return $data;
+		return $embed_data;
 	}
 
 	/**

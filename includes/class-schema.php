@@ -55,8 +55,7 @@ final class Schema {
 		global $wpdb;
 
 		foreach ( $this->table_names() as $table ) {
-			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Table names are built from the DB prefix and class constants; identifiers cannot be bound as placeholders.
-			$wpdb->query( "DROP TABLE IF EXISTS `{$table}`" );
+			$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS %i', $table ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- Dropping the plugin's own tables is the point of uninstalling.
 		}
 	}
 
@@ -66,12 +65,21 @@ final class Schema {
 	 * @return string[]
 	 */
 	public function table_names(): array {
-		global $wpdb;
-
 		return array_map(
-			fn ( string $table ): string => $wpdb->prefix . $table,
+			array( self::class, 'table' ),
 			array( self::IDENTITIES, self::OTP_REQUESTS, self::PROCESSED_EVENTS, self::AUDIT_LOG )
 		);
+	}
+
+	/**
+	 * Prefixed name of one of the plugin's tables.
+	 *
+	 * @param string $name One of the table constants of this class.
+	 */
+	public static function table( string $name ): string {
+		global $wpdb;
+
+		return $wpdb->prefix . $name;
 	}
 
 	/**
@@ -89,13 +97,14 @@ final class Schema {
 
 		$prefix          = $wpdb->prefix;
 		$charset_collate = $wpdb->get_charset_collate();
+		$rep_code_length = Rep_Codes::MAX_LENGTH;
 
 		return array(
 			"CREATE TABLE {$prefix}" . self::IDENTITIES . " (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				email varchar(190) NOT NULL,
 				verified_at datetime DEFAULT NULL,
-				rep_code varchar(32) DEFAULT NULL,
+				rep_code varchar({$rep_code_length}) DEFAULT NULL,
 				created_at datetime NOT NULL,
 				PRIMARY KEY  (id),
 				UNIQUE KEY email (email),

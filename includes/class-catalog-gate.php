@@ -111,14 +111,14 @@ final class Catalog_Gate {
 	/**
 	 * Refuses catalog REST routes to visitors without access.
 	 *
-	 * @param mixed            $result  Response from an earlier filter, or null.
-	 * @param \WP_REST_Request $request Request being dispatched.
-	 * @param string           $route   Pattern of the matched route.
-	 * @return mixed The earlier result, or an error.
+	 * @param mixed            $earlier_response Response from an earlier filter, or null.
+	 * @param \WP_REST_Request $request          Request being dispatched.
+	 * @param string           $route            Pattern of the matched route.
+	 * @return mixed The earlier response, or an error.
 	 */
-	public function guard_rest_request( $result, $request, $route ) {
-		if ( null !== $result || ! is_string( $route ) || ! preg_match( self::REST_ROUTES, $route ) || $this->access->is_granted() ) {
-			return $result;
+	public function guard_rest_request( $earlier_response, $request, $route ) {
+		if ( null !== $earlier_response || ! is_string( $route ) || ! preg_match( self::REST_ROUTES, $route ) || $this->access->is_granted() ) {
+			return $earlier_response;
 		}
 
 		return new \WP_Error(
@@ -152,10 +152,10 @@ final class Catalog_Gate {
 	 * The cart can outlive the session, and the non-JavaScript checkout runs
 	 * on wp_loaded, before any page redirect.
 	 *
-	 * @param array     $data   Posted checkout data, unused.
-	 * @param \WP_Error $errors Validation errors so far.
+	 * @param array     $posted_fields Posted checkout fields, unused.
+	 * @param \WP_Error $errors        Validation errors so far.
 	 */
-	public function guard_checkout( $data, $errors ): void {
+	public function guard_checkout( $posted_fields, $errors ): void {
 		if ( $errors instanceof \WP_Error && ! $this->access->is_granted() ) {
 			$errors->add( 'gaa_sign_in_required', __( 'Sign in again to place this order.', 'gated-access-attribution' ) );
 		}

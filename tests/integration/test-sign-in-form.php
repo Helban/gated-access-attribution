@@ -11,6 +11,7 @@ use GatedAccess\Email_Address;
 use GatedAccess\Hmac;
 use GatedAccess\Identities;
 use GatedAccess\Otp_Service;
+use GatedAccess\Request_Guard;
 use GatedAccess\Session;
 use GatedAccess\Sign_In_Form;
 use GatedAccess\Sign_In_Page;
@@ -296,7 +297,7 @@ class Test_Sign_In_Form extends WP_UnitTestCase {
 	 * A form with no state from earlier submissions.
 	 */
 	private function new_form(): Sign_In_Form {
-		return new Sign_In_Form( new Otp_Service( new Hmac() ), $this->identities, $this->session, new Sign_In_Page() );
+		return new Sign_In_Form( new Otp_Service( new Hmac() ), $this->identities, $this->session, new Sign_In_Page(), new Request_Guard() );
 	}
 
 	/**

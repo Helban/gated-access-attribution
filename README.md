@@ -2,6 +2,8 @@
 
 A WooCommerce plugin for stores that sell only to approved buyers. Visitors arrive through a sales rep's referral link, sign in with a one-time code sent by email, and only then see the catalog and prices. Every order records, on the server, which rep brought the buyer.
 
+A 77-second walkthrough of the sign-in, checkout and admin screens on a local test site: https://helban.dev/assets/video/gated-access-walkthrough-ee8ac0ea.mp4 (the narration is a synthetic copy of the author's voice).
+
 `NOTES.md` has the engineering notes: how the tests run, what was verified and what was not, design decisions, and open questions.
 
 ## Requirements
